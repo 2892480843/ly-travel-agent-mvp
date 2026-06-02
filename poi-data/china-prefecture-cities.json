@@ -1,0 +1,2706 @@
+{
+  "source": {
+    "name": "民政部 2024年中华人民共和国县以上行政区划代码",
+    "url": "https://www.mca.gov.cn/mzsj/xzqh/2025/202401xzqh.html",
+    "scope": "Mainland China municipalities and prefecture-level administrative divisions",
+    "retrievedAt": "2026-06-02"
+  },
+  "cities": [
+    {
+      "id": "beijing",
+      "name": "北京",
+      "officialName": "北京市",
+      "pinyin": "Beijing",
+      "adcode": "110000",
+      "level": "municipality"
+    },
+    {
+      "id": "tianjin",
+      "name": "天津",
+      "officialName": "天津市",
+      "pinyin": "Tianjin",
+      "adcode": "120000",
+      "level": "municipality"
+    },
+    {
+      "id": "shijiazhuang",
+      "name": "石家庄",
+      "officialName": "石家庄市",
+      "pinyin": "Shijiazhuang",
+      "adcode": "130100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tangshan",
+      "name": "唐山",
+      "officialName": "唐山市",
+      "pinyin": "Tangshan",
+      "adcode": "130200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qinhuangdao",
+      "name": "秦皇岛",
+      "officialName": "秦皇岛市",
+      "pinyin": "Qinhuangdao",
+      "adcode": "130300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "handan",
+      "name": "邯郸",
+      "officialName": "邯郸市",
+      "pinyin": "Handan",
+      "adcode": "130400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xingtai",
+      "name": "邢台",
+      "officialName": "邢台市",
+      "pinyin": "Xingtai",
+      "adcode": "130500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "baoding",
+      "name": "保定",
+      "officialName": "保定市",
+      "pinyin": "Baoding",
+      "adcode": "130600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhangjiakou",
+      "name": "张家口",
+      "officialName": "张家口市",
+      "pinyin": "Zhangjiakou",
+      "adcode": "130700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chengde",
+      "name": "承德",
+      "officialName": "承德市",
+      "pinyin": "Chengde",
+      "adcode": "130800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "cangzhou",
+      "name": "沧州",
+      "officialName": "沧州市",
+      "pinyin": "Cangzhou",
+      "adcode": "130900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "langfang",
+      "name": "廊坊",
+      "officialName": "廊坊市",
+      "pinyin": "Langfang",
+      "adcode": "131000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hengshui",
+      "name": "衡水",
+      "officialName": "衡水市",
+      "pinyin": "Hengshui",
+      "adcode": "131100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "taiyuan",
+      "name": "太原",
+      "officialName": "太原市",
+      "pinyin": "Taiyuan",
+      "adcode": "140100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "datong",
+      "name": "大同",
+      "officialName": "大同市",
+      "pinyin": "Datong",
+      "adcode": "140200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yangquan",
+      "name": "阳泉",
+      "officialName": "阳泉市",
+      "pinyin": "Yangquan",
+      "adcode": "140300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhangzhi",
+      "name": "长治",
+      "officialName": "长治市",
+      "pinyin": "Zhangzhi",
+      "adcode": "140400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jincheng",
+      "name": "晋城",
+      "officialName": "晋城市",
+      "pinyin": "Jincheng",
+      "adcode": "140500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shuozhou",
+      "name": "朔州",
+      "officialName": "朔州市",
+      "pinyin": "Shuozhou",
+      "adcode": "140600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jinzhong",
+      "name": "晋中",
+      "officialName": "晋中市",
+      "pinyin": "Jinzhong",
+      "adcode": "140700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yuncheng",
+      "name": "运城",
+      "officialName": "运城市",
+      "pinyin": "Yuncheng",
+      "adcode": "140800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xinzhou",
+      "name": "忻州",
+      "officialName": "忻州市",
+      "pinyin": "Xinzhou",
+      "adcode": "140900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "linfen",
+      "name": "临汾",
+      "officialName": "临汾市",
+      "pinyin": "Linfen",
+      "adcode": "141000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "lvliang",
+      "name": "吕梁",
+      "officialName": "吕梁市",
+      "pinyin": "Lvliang",
+      "adcode": "141100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hohhot",
+      "name": "呼和浩特",
+      "officialName": "呼和浩特市",
+      "pinyin": "Hohhot",
+      "adcode": "150100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "baotou",
+      "name": "包头",
+      "officialName": "包头市",
+      "pinyin": "Baotou",
+      "adcode": "150200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wuhai",
+      "name": "乌海",
+      "officialName": "乌海市",
+      "pinyin": "Wuhai",
+      "adcode": "150300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chifeng",
+      "name": "赤峰",
+      "officialName": "赤峰市",
+      "pinyin": "Chifeng",
+      "adcode": "150400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tongliao",
+      "name": "通辽",
+      "officialName": "通辽市",
+      "pinyin": "Tongliao",
+      "adcode": "150500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "eerduosi",
+      "name": "鄂尔多斯",
+      "officialName": "鄂尔多斯市",
+      "pinyin": "Eerduosi",
+      "adcode": "150600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hulunbeier",
+      "name": "呼伦贝尔",
+      "officialName": "呼伦贝尔市",
+      "pinyin": "Hulunbeier",
+      "adcode": "150700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "bayannaoer",
+      "name": "巴彦淖尔",
+      "officialName": "巴彦淖尔市",
+      "pinyin": "Bayannaoer",
+      "adcode": "150800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wulanchabu",
+      "name": "乌兰察布",
+      "officialName": "乌兰察布市",
+      "pinyin": "Wulanchabu",
+      "adcode": "150900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xinganmeng",
+      "name": "兴安盟",
+      "officialName": "兴安盟",
+      "pinyin": "Xinganmeng",
+      "adcode": "152200",
+      "level": "league"
+    },
+    {
+      "id": "xilinguoleimeng",
+      "name": "锡林郭勒盟",
+      "officialName": "锡林郭勒盟",
+      "pinyin": "Xilinguoleimeng",
+      "adcode": "152500",
+      "level": "league"
+    },
+    {
+      "id": "alashanmeng",
+      "name": "阿拉善盟",
+      "officialName": "阿拉善盟",
+      "pinyin": "Alashanmeng",
+      "adcode": "152900",
+      "level": "league"
+    },
+    {
+      "id": "shenyang",
+      "name": "沈阳",
+      "officialName": "沈阳市",
+      "pinyin": "Shenyang",
+      "adcode": "210100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "dalian",
+      "name": "大连",
+      "officialName": "大连市",
+      "pinyin": "Dalian",
+      "adcode": "210200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "anshan",
+      "name": "鞍山",
+      "officialName": "鞍山市",
+      "pinyin": "Anshan",
+      "adcode": "210300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "fushun",
+      "name": "抚顺",
+      "officialName": "抚顺市",
+      "pinyin": "Fushun",
+      "adcode": "210400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "benxi",
+      "name": "本溪",
+      "officialName": "本溪市",
+      "pinyin": "Benxi",
+      "adcode": "210500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "dandong",
+      "name": "丹东",
+      "officialName": "丹东市",
+      "pinyin": "Dandong",
+      "adcode": "210600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jinzhou",
+      "name": "锦州",
+      "officialName": "锦州市",
+      "pinyin": "Jinzhou",
+      "adcode": "210700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yingkou",
+      "name": "营口",
+      "officialName": "营口市",
+      "pinyin": "Yingkou",
+      "adcode": "210800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "fuxin",
+      "name": "阜新",
+      "officialName": "阜新市",
+      "pinyin": "Fuxin",
+      "adcode": "210900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "liaoyang",
+      "name": "辽阳",
+      "officialName": "辽阳市",
+      "pinyin": "Liaoyang",
+      "adcode": "211000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "panjin",
+      "name": "盘锦",
+      "officialName": "盘锦市",
+      "pinyin": "Panjin",
+      "adcode": "211100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tieling",
+      "name": "铁岭",
+      "officialName": "铁岭市",
+      "pinyin": "Tieling",
+      "adcode": "211200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhaoyang",
+      "name": "朝阳",
+      "officialName": "朝阳市",
+      "pinyin": "Zhaoyang",
+      "adcode": "211300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huludao",
+      "name": "葫芦岛",
+      "officialName": "葫芦岛市",
+      "pinyin": "Huludao",
+      "adcode": "211400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "changchun",
+      "name": "长春",
+      "officialName": "长春市",
+      "pinyin": "Changchun",
+      "adcode": "220100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jilin",
+      "name": "吉林",
+      "officialName": "吉林市",
+      "pinyin": "Jilin",
+      "adcode": "220200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "siping",
+      "name": "四平",
+      "officialName": "四平市",
+      "pinyin": "Siping",
+      "adcode": "220300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "liaoyuan",
+      "name": "辽源",
+      "officialName": "辽源市",
+      "pinyin": "Liaoyuan",
+      "adcode": "220400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tonghua",
+      "name": "通化",
+      "officialName": "通化市",
+      "pinyin": "Tonghua",
+      "adcode": "220500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "baishan",
+      "name": "白山",
+      "officialName": "白山市",
+      "pinyin": "Baishan",
+      "adcode": "220600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "songyuan",
+      "name": "松原",
+      "officialName": "松原市",
+      "pinyin": "Songyuan",
+      "adcode": "220700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "baicheng",
+      "name": "白城",
+      "officialName": "白城市",
+      "pinyin": "Baicheng",
+      "adcode": "220800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yanbianchaoxianzuzizhizhou",
+      "name": "延边朝鲜族自治州",
+      "officialName": "延边朝鲜族自治州",
+      "pinyin": "Yanbianchaoxianzuzizhizhou",
+      "adcode": "222400",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "haerbin",
+      "name": "哈尔滨",
+      "officialName": "哈尔滨市",
+      "pinyin": "Haerbin",
+      "adcode": "230100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qiqihaer",
+      "name": "齐齐哈尔",
+      "officialName": "齐齐哈尔市",
+      "pinyin": "Qiqihaer",
+      "adcode": "230200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jixi",
+      "name": "鸡西",
+      "officialName": "鸡西市",
+      "pinyin": "Jixi",
+      "adcode": "230300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hegang",
+      "name": "鹤岗",
+      "officialName": "鹤岗市",
+      "pinyin": "Hegang",
+      "adcode": "230400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shuangyashan",
+      "name": "双鸭山",
+      "officialName": "双鸭山市",
+      "pinyin": "Shuangyashan",
+      "adcode": "230500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "daqing",
+      "name": "大庆",
+      "officialName": "大庆市",
+      "pinyin": "Daqing",
+      "adcode": "230600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yichun",
+      "name": "伊春",
+      "officialName": "伊春市",
+      "pinyin": "Yichun",
+      "adcode": "230700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jiamusi",
+      "name": "佳木斯",
+      "officialName": "佳木斯市",
+      "pinyin": "Jiamusi",
+      "adcode": "230800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qitaihe",
+      "name": "七台河",
+      "officialName": "七台河市",
+      "pinyin": "Qitaihe",
+      "adcode": "230900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "mudanjiang",
+      "name": "牡丹江",
+      "officialName": "牡丹江市",
+      "pinyin": "Mudanjiang",
+      "adcode": "231000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "heihe",
+      "name": "黑河",
+      "officialName": "黑河市",
+      "pinyin": "Heihe",
+      "adcode": "231100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "suihua",
+      "name": "绥化",
+      "officialName": "绥化市",
+      "pinyin": "Suihua",
+      "adcode": "231200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "daxinganlingdiqu",
+      "name": "大兴安岭地区",
+      "officialName": "大兴安岭地区",
+      "pinyin": "Daxinganlingdiqu",
+      "adcode": "232700",
+      "level": "prefecture"
+    },
+    {
+      "id": "shanghai",
+      "name": "上海",
+      "officialName": "上海市",
+      "pinyin": "Shanghai",
+      "adcode": "310000",
+      "level": "municipality"
+    },
+    {
+      "id": "nanjing",
+      "name": "南京",
+      "officialName": "南京市",
+      "pinyin": "Nanjing",
+      "adcode": "320100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wuxi",
+      "name": "无锡",
+      "officialName": "无锡市",
+      "pinyin": "Wuxi",
+      "adcode": "320200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xuzhou",
+      "name": "徐州",
+      "officialName": "徐州市",
+      "pinyin": "Xuzhou",
+      "adcode": "320300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "changzhou",
+      "name": "常州",
+      "officialName": "常州市",
+      "pinyin": "Changzhou",
+      "adcode": "320400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "suzhou",
+      "name": "苏州",
+      "officialName": "苏州市",
+      "pinyin": "Suzhou",
+      "adcode": "320500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "nantong",
+      "name": "南通",
+      "officialName": "南通市",
+      "pinyin": "Nantong",
+      "adcode": "320600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "lianyungang",
+      "name": "连云港",
+      "officialName": "连云港市",
+      "pinyin": "Lianyungang",
+      "adcode": "320700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huaian",
+      "name": "淮安",
+      "officialName": "淮安市",
+      "pinyin": "Huaian",
+      "adcode": "320800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yancheng",
+      "name": "盐城",
+      "officialName": "盐城市",
+      "pinyin": "Yancheng",
+      "adcode": "320900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yangzhou",
+      "name": "扬州",
+      "officialName": "扬州市",
+      "pinyin": "Yangzhou",
+      "adcode": "321000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhenjiang",
+      "name": "镇江",
+      "officialName": "镇江市",
+      "pinyin": "Zhenjiang",
+      "adcode": "321100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "taizhou",
+      "name": "泰州",
+      "officialName": "泰州市",
+      "pinyin": "Taizhou",
+      "adcode": "321200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "suqian",
+      "name": "宿迁",
+      "officialName": "宿迁市",
+      "pinyin": "Suqian",
+      "adcode": "321300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hangzhou",
+      "name": "杭州",
+      "officialName": "杭州市",
+      "pinyin": "Hangzhou",
+      "adcode": "330100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "ningbo",
+      "name": "宁波",
+      "officialName": "宁波市",
+      "pinyin": "Ningbo",
+      "adcode": "330200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wenzhou",
+      "name": "温州",
+      "officialName": "温州市",
+      "pinyin": "Wenzhou",
+      "adcode": "330300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jiaxing",
+      "name": "嘉兴",
+      "officialName": "嘉兴市",
+      "pinyin": "Jiaxing",
+      "adcode": "330400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huzhou",
+      "name": "湖州",
+      "officialName": "湖州市",
+      "pinyin": "Huzhou",
+      "adcode": "330500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shaoxing",
+      "name": "绍兴",
+      "officialName": "绍兴市",
+      "pinyin": "Shaoxing",
+      "adcode": "330600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jinhua",
+      "name": "金华",
+      "officialName": "金华市",
+      "pinyin": "Jinhua",
+      "adcode": "330700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "quzhou",
+      "name": "衢州",
+      "officialName": "衢州市",
+      "pinyin": "Quzhou",
+      "adcode": "330800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhoushan",
+      "name": "舟山",
+      "officialName": "舟山市",
+      "pinyin": "Zhoushan",
+      "adcode": "330900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "taizhou-331000",
+      "name": "台州",
+      "officialName": "台州市",
+      "pinyin": "Taizhou",
+      "adcode": "331000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "lishui",
+      "name": "丽水",
+      "officialName": "丽水市",
+      "pinyin": "Lishui",
+      "adcode": "331100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hefei",
+      "name": "合肥",
+      "officialName": "合肥市",
+      "pinyin": "Hefei",
+      "adcode": "340100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wuhu",
+      "name": "芜湖",
+      "officialName": "芜湖市",
+      "pinyin": "Wuhu",
+      "adcode": "340200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "bengbu",
+      "name": "蚌埠",
+      "officialName": "蚌埠市",
+      "pinyin": "Bengbu",
+      "adcode": "340300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huainan",
+      "name": "淮南",
+      "officialName": "淮南市",
+      "pinyin": "Huainan",
+      "adcode": "340400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "maanshan",
+      "name": "马鞍山",
+      "officialName": "马鞍山市",
+      "pinyin": "Maanshan",
+      "adcode": "340500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huaibei",
+      "name": "淮北",
+      "officialName": "淮北市",
+      "pinyin": "Huaibei",
+      "adcode": "340600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tongling",
+      "name": "铜陵",
+      "officialName": "铜陵市",
+      "pinyin": "Tongling",
+      "adcode": "340700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "anqing",
+      "name": "安庆",
+      "officialName": "安庆市",
+      "pinyin": "Anqing",
+      "adcode": "340800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huangshan",
+      "name": "黄山",
+      "officialName": "黄山市",
+      "pinyin": "Huangshan",
+      "adcode": "341000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chuzhou",
+      "name": "滁州",
+      "officialName": "滁州市",
+      "pinyin": "Chuzhou",
+      "adcode": "341100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "fuyang",
+      "name": "阜阳",
+      "officialName": "阜阳市",
+      "pinyin": "Fuyang",
+      "adcode": "341200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "suzhou-341300",
+      "name": "宿州",
+      "officialName": "宿州市",
+      "pinyin": "Suzhou",
+      "adcode": "341300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "luan",
+      "name": "六安",
+      "officialName": "六安市",
+      "pinyin": "Luan",
+      "adcode": "341500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "bozhou",
+      "name": "亳州",
+      "officialName": "亳州市",
+      "pinyin": "Bozhou",
+      "adcode": "341600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chizhou",
+      "name": "池州",
+      "officialName": "池州市",
+      "pinyin": "Chizhou",
+      "adcode": "341700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xuancheng",
+      "name": "宣城",
+      "officialName": "宣城市",
+      "pinyin": "Xuancheng",
+      "adcode": "341800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "fuzhou",
+      "name": "福州",
+      "officialName": "福州市",
+      "pinyin": "Fuzhou",
+      "adcode": "350100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xiamen",
+      "name": "厦门",
+      "officialName": "厦门市",
+      "pinyin": "Xiamen",
+      "adcode": "350200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "putian",
+      "name": "莆田",
+      "officialName": "莆田市",
+      "pinyin": "Putian",
+      "adcode": "350300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "sanming",
+      "name": "三明",
+      "officialName": "三明市",
+      "pinyin": "Sanming",
+      "adcode": "350400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "quanzhou",
+      "name": "泉州",
+      "officialName": "泉州市",
+      "pinyin": "Quanzhou",
+      "adcode": "350500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhangzhou",
+      "name": "漳州",
+      "officialName": "漳州市",
+      "pinyin": "Zhangzhou",
+      "adcode": "350600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "nanping",
+      "name": "南平",
+      "officialName": "南平市",
+      "pinyin": "Nanping",
+      "adcode": "350700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "longyan",
+      "name": "龙岩",
+      "officialName": "龙岩市",
+      "pinyin": "Longyan",
+      "adcode": "350800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "ningde",
+      "name": "宁德",
+      "officialName": "宁德市",
+      "pinyin": "Ningde",
+      "adcode": "350900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "nanchang",
+      "name": "南昌",
+      "officialName": "南昌市",
+      "pinyin": "Nanchang",
+      "adcode": "360100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jingdezhen",
+      "name": "景德镇",
+      "officialName": "景德镇市",
+      "pinyin": "Jingdezhen",
+      "adcode": "360200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "pingxiang",
+      "name": "萍乡",
+      "officialName": "萍乡市",
+      "pinyin": "Pingxiang",
+      "adcode": "360300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jiujiang",
+      "name": "九江",
+      "officialName": "九江市",
+      "pinyin": "Jiujiang",
+      "adcode": "360400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xinyu",
+      "name": "新余",
+      "officialName": "新余市",
+      "pinyin": "Xinyu",
+      "adcode": "360500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yingtan",
+      "name": "鹰潭",
+      "officialName": "鹰潭市",
+      "pinyin": "Yingtan",
+      "adcode": "360600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "ganzhou",
+      "name": "赣州",
+      "officialName": "赣州市",
+      "pinyin": "Ganzhou",
+      "adcode": "360700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jian",
+      "name": "吉安",
+      "officialName": "吉安市",
+      "pinyin": "Jian",
+      "adcode": "360800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yichun-360900",
+      "name": "宜春",
+      "officialName": "宜春市",
+      "pinyin": "Yichun",
+      "adcode": "360900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "fuzhou-361000",
+      "name": "抚州",
+      "officialName": "抚州市",
+      "pinyin": "Fuzhou",
+      "adcode": "361000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shangrao",
+      "name": "上饶",
+      "officialName": "上饶市",
+      "pinyin": "Shangrao",
+      "adcode": "361100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jinan",
+      "name": "济南",
+      "officialName": "济南市",
+      "pinyin": "Jinan",
+      "adcode": "370100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qingdao",
+      "name": "青岛",
+      "officialName": "青岛市",
+      "pinyin": "Qingdao",
+      "adcode": "370200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zibo",
+      "name": "淄博",
+      "officialName": "淄博市",
+      "pinyin": "Zibo",
+      "adcode": "370300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zaozhuang",
+      "name": "枣庄",
+      "officialName": "枣庄市",
+      "pinyin": "Zaozhuang",
+      "adcode": "370400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "dongying",
+      "name": "东营",
+      "officialName": "东营市",
+      "pinyin": "Dongying",
+      "adcode": "370500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yantai",
+      "name": "烟台",
+      "officialName": "烟台市",
+      "pinyin": "Yantai",
+      "adcode": "370600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "weifang",
+      "name": "潍坊",
+      "officialName": "潍坊市",
+      "pinyin": "Weifang",
+      "adcode": "370700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jining",
+      "name": "济宁",
+      "officialName": "济宁市",
+      "pinyin": "Jining",
+      "adcode": "370800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "taian",
+      "name": "泰安",
+      "officialName": "泰安市",
+      "pinyin": "Taian",
+      "adcode": "370900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "weihai",
+      "name": "威海",
+      "officialName": "威海市",
+      "pinyin": "Weihai",
+      "adcode": "371000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "rizhao",
+      "name": "日照",
+      "officialName": "日照市",
+      "pinyin": "Rizhao",
+      "adcode": "371100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "linyi",
+      "name": "临沂",
+      "officialName": "临沂市",
+      "pinyin": "Linyi",
+      "adcode": "371300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "dezhou",
+      "name": "德州",
+      "officialName": "德州市",
+      "pinyin": "Dezhou",
+      "adcode": "371400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "liaocheng",
+      "name": "聊城",
+      "officialName": "聊城市",
+      "pinyin": "Liaocheng",
+      "adcode": "371500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "binzhou",
+      "name": "滨州",
+      "officialName": "滨州市",
+      "pinyin": "Binzhou",
+      "adcode": "371600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "heze",
+      "name": "菏泽",
+      "officialName": "菏泽市",
+      "pinyin": "Heze",
+      "adcode": "371700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhengzhou",
+      "name": "郑州",
+      "officialName": "郑州市",
+      "pinyin": "Zhengzhou",
+      "adcode": "410100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "kaifeng",
+      "name": "开封",
+      "officialName": "开封市",
+      "pinyin": "Kaifeng",
+      "adcode": "410200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "luoyang",
+      "name": "洛阳",
+      "officialName": "洛阳市",
+      "pinyin": "Luoyang",
+      "adcode": "410300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "pingdingshan",
+      "name": "平顶山",
+      "officialName": "平顶山市",
+      "pinyin": "Pingdingshan",
+      "adcode": "410400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "anyang",
+      "name": "安阳",
+      "officialName": "安阳市",
+      "pinyin": "Anyang",
+      "adcode": "410500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hebi",
+      "name": "鹤壁",
+      "officialName": "鹤壁市",
+      "pinyin": "Hebi",
+      "adcode": "410600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xinxiang",
+      "name": "新乡",
+      "officialName": "新乡市",
+      "pinyin": "Xinxiang",
+      "adcode": "410700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jiaozuo",
+      "name": "焦作",
+      "officialName": "焦作市",
+      "pinyin": "Jiaozuo",
+      "adcode": "410800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "puyang",
+      "name": "濮阳",
+      "officialName": "濮阳市",
+      "pinyin": "Puyang",
+      "adcode": "410900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xuchang",
+      "name": "许昌",
+      "officialName": "许昌市",
+      "pinyin": "Xuchang",
+      "adcode": "411000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tahe",
+      "name": "漯河",
+      "officialName": "漯河市",
+      "pinyin": "Tahe",
+      "adcode": "411100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "sanmenxia",
+      "name": "三门峡",
+      "officialName": "三门峡市",
+      "pinyin": "Sanmenxia",
+      "adcode": "411200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "nanyang",
+      "name": "南阳",
+      "officialName": "南阳市",
+      "pinyin": "Nanyang",
+      "adcode": "411300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shangqiu",
+      "name": "商丘",
+      "officialName": "商丘市",
+      "pinyin": "Shangqiu",
+      "adcode": "411400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xinyang",
+      "name": "信阳",
+      "officialName": "信阳市",
+      "pinyin": "Xinyang",
+      "adcode": "411500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhoukou",
+      "name": "周口",
+      "officialName": "周口市",
+      "pinyin": "Zhoukou",
+      "adcode": "411600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhumadian",
+      "name": "驻马店",
+      "officialName": "驻马店市",
+      "pinyin": "Zhumadian",
+      "adcode": "411700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wuhan",
+      "name": "武汉",
+      "officialName": "武汉市",
+      "pinyin": "Wuhan",
+      "adcode": "420100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huangshi",
+      "name": "黄石",
+      "officialName": "黄石市",
+      "pinyin": "Huangshi",
+      "adcode": "420200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shiyan",
+      "name": "十堰",
+      "officialName": "十堰市",
+      "pinyin": "Shiyan",
+      "adcode": "420300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yichang",
+      "name": "宜昌",
+      "officialName": "宜昌市",
+      "pinyin": "Yichang",
+      "adcode": "420500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xiangyang",
+      "name": "襄阳",
+      "officialName": "襄阳市",
+      "pinyin": "Xiangyang",
+      "adcode": "420600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "ezhou",
+      "name": "鄂州",
+      "officialName": "鄂州市",
+      "pinyin": "Ezhou",
+      "adcode": "420700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jingmen",
+      "name": "荆门",
+      "officialName": "荆门市",
+      "pinyin": "Jingmen",
+      "adcode": "420800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xiaogan",
+      "name": "孝感",
+      "officialName": "孝感市",
+      "pinyin": "Xiaogan",
+      "adcode": "420900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jingzhou",
+      "name": "荆州",
+      "officialName": "荆州市",
+      "pinyin": "Jingzhou",
+      "adcode": "421000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huanggang",
+      "name": "黄冈",
+      "officialName": "黄冈市",
+      "pinyin": "Huanggang",
+      "adcode": "421100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xianning",
+      "name": "咸宁",
+      "officialName": "咸宁市",
+      "pinyin": "Xianning",
+      "adcode": "421200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "suizhou",
+      "name": "随州",
+      "officialName": "随州市",
+      "pinyin": "Suizhou",
+      "adcode": "421300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "enshitujiazumiaozuzizhizhou",
+      "name": "恩施土家族苗族自治州",
+      "officialName": "恩施土家族苗族自治州",
+      "pinyin": "Enshitujiazumiaozuzizhizhou",
+      "adcode": "422800",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "changsha",
+      "name": "长沙",
+      "officialName": "长沙市",
+      "pinyin": "Changsha",
+      "adcode": "430100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhuzhou",
+      "name": "株洲",
+      "officialName": "株洲市",
+      "pinyin": "Zhuzhou",
+      "adcode": "430200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xiangtan",
+      "name": "湘潭",
+      "officialName": "湘潭市",
+      "pinyin": "Xiangtan",
+      "adcode": "430300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hengyang",
+      "name": "衡阳",
+      "officialName": "衡阳市",
+      "pinyin": "Hengyang",
+      "adcode": "430400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shaoyang",
+      "name": "邵阳",
+      "officialName": "邵阳市",
+      "pinyin": "Shaoyang",
+      "adcode": "430500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yueyang",
+      "name": "岳阳",
+      "officialName": "岳阳市",
+      "pinyin": "Yueyang",
+      "adcode": "430600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "changde",
+      "name": "常德",
+      "officialName": "常德市",
+      "pinyin": "Changde",
+      "adcode": "430700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhangjiajie",
+      "name": "张家界",
+      "officialName": "张家界市",
+      "pinyin": "Zhangjiajie",
+      "adcode": "430800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yiyang",
+      "name": "益阳",
+      "officialName": "益阳市",
+      "pinyin": "Yiyang",
+      "adcode": "430900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chenzhou",
+      "name": "郴州",
+      "officialName": "郴州市",
+      "pinyin": "Chenzhou",
+      "adcode": "431000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yongzhou",
+      "name": "永州",
+      "officialName": "永州市",
+      "pinyin": "Yongzhou",
+      "adcode": "431100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huaihua",
+      "name": "怀化",
+      "officialName": "怀化市",
+      "pinyin": "Huaihua",
+      "adcode": "431200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "loudi",
+      "name": "娄底",
+      "officialName": "娄底市",
+      "pinyin": "Loudi",
+      "adcode": "431300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xiangxitujiazumiaozuzizhizhou",
+      "name": "湘西土家族苗族自治州",
+      "officialName": "湘西土家族苗族自治州",
+      "pinyin": "Xiangxitujiazumiaozuzizhizhou",
+      "adcode": "433100",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "guangzhou",
+      "name": "广州",
+      "officialName": "广州市",
+      "pinyin": "Guangzhou",
+      "adcode": "440100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shaoguan",
+      "name": "韶关",
+      "officialName": "韶关市",
+      "pinyin": "Shaoguan",
+      "adcode": "440200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shenzhen",
+      "name": "深圳",
+      "officialName": "深圳市",
+      "pinyin": "Shenzhen",
+      "adcode": "440300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhuhai",
+      "name": "珠海",
+      "officialName": "珠海市",
+      "pinyin": "Zhuhai",
+      "adcode": "440400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shantou",
+      "name": "汕头",
+      "officialName": "汕头市",
+      "pinyin": "Shantou",
+      "adcode": "440500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "foshan",
+      "name": "佛山",
+      "officialName": "佛山市",
+      "pinyin": "Foshan",
+      "adcode": "440600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jiangmen",
+      "name": "江门",
+      "officialName": "江门市",
+      "pinyin": "Jiangmen",
+      "adcode": "440700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhanjiang",
+      "name": "湛江",
+      "officialName": "湛江市",
+      "pinyin": "Zhanjiang",
+      "adcode": "440800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "maoming",
+      "name": "茂名",
+      "officialName": "茂名市",
+      "pinyin": "Maoming",
+      "adcode": "440900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhaoqing",
+      "name": "肇庆",
+      "officialName": "肇庆市",
+      "pinyin": "Zhaoqing",
+      "adcode": "441200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "huizhou",
+      "name": "惠州",
+      "officialName": "惠州市",
+      "pinyin": "Huizhou",
+      "adcode": "441300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "meizhou",
+      "name": "梅州",
+      "officialName": "梅州市",
+      "pinyin": "Meizhou",
+      "adcode": "441400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shanwei",
+      "name": "汕尾",
+      "officialName": "汕尾市",
+      "pinyin": "Shanwei",
+      "adcode": "441500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "heyuan",
+      "name": "河源",
+      "officialName": "河源市",
+      "pinyin": "Heyuan",
+      "adcode": "441600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yangjiang",
+      "name": "阳江",
+      "officialName": "阳江市",
+      "pinyin": "Yangjiang",
+      "adcode": "441700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qingyuan",
+      "name": "清远",
+      "officialName": "清远市",
+      "pinyin": "Qingyuan",
+      "adcode": "441800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "dongguan",
+      "name": "东莞",
+      "officialName": "东莞市",
+      "pinyin": "Dongguan",
+      "adcode": "441900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhongshan",
+      "name": "中山",
+      "officialName": "中山市",
+      "pinyin": "Zhongshan",
+      "adcode": "442000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chaozhou",
+      "name": "潮州",
+      "officialName": "潮州市",
+      "pinyin": "Chaozhou",
+      "adcode": "445100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jieyang",
+      "name": "揭阳",
+      "officialName": "揭阳市",
+      "pinyin": "Jieyang",
+      "adcode": "445200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yunfu",
+      "name": "云浮",
+      "officialName": "云浮市",
+      "pinyin": "Yunfu",
+      "adcode": "445300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "nanning",
+      "name": "南宁",
+      "officialName": "南宁市",
+      "pinyin": "Nanning",
+      "adcode": "450100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "liuzhou",
+      "name": "柳州",
+      "officialName": "柳州市",
+      "pinyin": "Liuzhou",
+      "adcode": "450200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "guilin",
+      "name": "桂林",
+      "officialName": "桂林市",
+      "pinyin": "Guilin",
+      "adcode": "450300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wuzhou",
+      "name": "梧州",
+      "officialName": "梧州市",
+      "pinyin": "Wuzhou",
+      "adcode": "450400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "beihai",
+      "name": "北海",
+      "officialName": "北海市",
+      "pinyin": "Beihai",
+      "adcode": "450500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "fangchenggang",
+      "name": "防城港",
+      "officialName": "防城港市",
+      "pinyin": "Fangchenggang",
+      "adcode": "450600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qinzhou",
+      "name": "钦州",
+      "officialName": "钦州市",
+      "pinyin": "Qinzhou",
+      "adcode": "450700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "guigang",
+      "name": "贵港",
+      "officialName": "贵港市",
+      "pinyin": "Guigang",
+      "adcode": "450800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yulin",
+      "name": "玉林",
+      "officialName": "玉林市",
+      "pinyin": "Yulin",
+      "adcode": "450900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "baise",
+      "name": "百色",
+      "officialName": "百色市",
+      "pinyin": "Baise",
+      "adcode": "451000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hezhou",
+      "name": "贺州",
+      "officialName": "贺州市",
+      "pinyin": "Hezhou",
+      "adcode": "451100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hechi",
+      "name": "河池",
+      "officialName": "河池市",
+      "pinyin": "Hechi",
+      "adcode": "451200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "laibin",
+      "name": "来宾",
+      "officialName": "来宾市",
+      "pinyin": "Laibin",
+      "adcode": "451300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chongzuo",
+      "name": "崇左",
+      "officialName": "崇左市",
+      "pinyin": "Chongzuo",
+      "adcode": "451400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "haikou",
+      "name": "海口",
+      "officialName": "海口市",
+      "pinyin": "Haikou",
+      "adcode": "460100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "sanya",
+      "name": "三亚",
+      "officialName": "三亚市",
+      "pinyin": "Sanya",
+      "adcode": "460200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "sansha",
+      "name": "三沙",
+      "officialName": "三沙市",
+      "pinyin": "Sansha",
+      "adcode": "460300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "danzhou",
+      "name": "儋州",
+      "officialName": "儋州市",
+      "pinyin": "Danzhou",
+      "adcode": "460400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chongqing",
+      "name": "重庆",
+      "officialName": "重庆市",
+      "pinyin": "Chongqing",
+      "adcode": "500000",
+      "level": "municipality"
+    },
+    {
+      "id": "chengdu",
+      "name": "成都",
+      "officialName": "成都市",
+      "pinyin": "Chengdu",
+      "adcode": "510100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zigong",
+      "name": "自贡",
+      "officialName": "自贡市",
+      "pinyin": "Zigong",
+      "adcode": "510300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "panzhihua",
+      "name": "攀枝花",
+      "officialName": "攀枝花市",
+      "pinyin": "Panzhihua",
+      "adcode": "510400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "luzhou",
+      "name": "泸州",
+      "officialName": "泸州市",
+      "pinyin": "Luzhou",
+      "adcode": "510500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "deyang",
+      "name": "德阳",
+      "officialName": "德阳市",
+      "pinyin": "Deyang",
+      "adcode": "510600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "mianyang",
+      "name": "绵阳",
+      "officialName": "绵阳市",
+      "pinyin": "Mianyang",
+      "adcode": "510700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "guangyuan",
+      "name": "广元",
+      "officialName": "广元市",
+      "pinyin": "Guangyuan",
+      "adcode": "510800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "suining",
+      "name": "遂宁",
+      "officialName": "遂宁市",
+      "pinyin": "Suining",
+      "adcode": "510900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "neijiang",
+      "name": "内江",
+      "officialName": "内江市",
+      "pinyin": "Neijiang",
+      "adcode": "511000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "leshan",
+      "name": "乐山",
+      "officialName": "乐山市",
+      "pinyin": "Leshan",
+      "adcode": "511100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "nanchong",
+      "name": "南充",
+      "officialName": "南充市",
+      "pinyin": "Nanchong",
+      "adcode": "511300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "meishan",
+      "name": "眉山",
+      "officialName": "眉山市",
+      "pinyin": "Meishan",
+      "adcode": "511400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yibin",
+      "name": "宜宾",
+      "officialName": "宜宾市",
+      "pinyin": "Yibin",
+      "adcode": "511500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "guangan",
+      "name": "广安",
+      "officialName": "广安市",
+      "pinyin": "Guangan",
+      "adcode": "511600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "dazhou",
+      "name": "达州",
+      "officialName": "达州市",
+      "pinyin": "Dazhou",
+      "adcode": "511700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yaan",
+      "name": "雅安",
+      "officialName": "雅安市",
+      "pinyin": "Yaan",
+      "adcode": "511800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "bazhong",
+      "name": "巴中",
+      "officialName": "巴中市",
+      "pinyin": "Bazhong",
+      "adcode": "511900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "ziyang",
+      "name": "资阳",
+      "officialName": "资阳市",
+      "pinyin": "Ziyang",
+      "adcode": "512000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "abazangzuqiangzuzizhizhou",
+      "name": "阿坝藏族羌族自治州",
+      "officialName": "阿坝藏族羌族自治州",
+      "pinyin": "Abazangzuqiangzuzizhizhou",
+      "adcode": "513200",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "ganzizangzuzizhizhou",
+      "name": "甘孜藏族自治州",
+      "officialName": "甘孜藏族自治州",
+      "pinyin": "Ganzizangzuzizhizhou",
+      "adcode": "513300",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "liangshanyizuzizhizhou",
+      "name": "凉山彝族自治州",
+      "officialName": "凉山彝族自治州",
+      "pinyin": "Liangshanyizuzizhizhou",
+      "adcode": "513400",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "guiyang",
+      "name": "贵阳",
+      "officialName": "贵阳市",
+      "pinyin": "Guiyang",
+      "adcode": "520100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "liupanshui",
+      "name": "六盘水",
+      "officialName": "六盘水市",
+      "pinyin": "Liupanshui",
+      "adcode": "520200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zunyi",
+      "name": "遵义",
+      "officialName": "遵义市",
+      "pinyin": "Zunyi",
+      "adcode": "520300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "anshun",
+      "name": "安顺",
+      "officialName": "安顺市",
+      "pinyin": "Anshun",
+      "adcode": "520400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "bijie",
+      "name": "毕节",
+      "officialName": "毕节市",
+      "pinyin": "Bijie",
+      "adcode": "520500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tongren",
+      "name": "铜仁",
+      "officialName": "铜仁市",
+      "pinyin": "Tongren",
+      "adcode": "520600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qianxinanbuyizumiaozuzizhizhou",
+      "name": "黔西南布依族苗族自治州",
+      "officialName": "黔西南布依族苗族自治州",
+      "pinyin": "Qianxinanbuyizumiaozuzizhizhou",
+      "adcode": "522300",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "qiandongnanmiaozudongzuzizhizhou",
+      "name": "黔东南苗族侗族自治州",
+      "officialName": "黔东南苗族侗族自治州",
+      "pinyin": "Qiandongnanmiaozudongzuzizhizhou",
+      "adcode": "522600",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "qiannanbuyizumiaozuzizhizhou",
+      "name": "黔南布依族苗族自治州",
+      "officialName": "黔南布依族苗族自治州",
+      "pinyin": "Qiannanbuyizumiaozuzizhizhou",
+      "adcode": "522700",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "kunming",
+      "name": "昆明",
+      "officialName": "昆明市",
+      "pinyin": "Kunming",
+      "adcode": "530100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qujing",
+      "name": "曲靖",
+      "officialName": "曲靖市",
+      "pinyin": "Qujing",
+      "adcode": "530300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yuxi",
+      "name": "玉溪",
+      "officialName": "玉溪市",
+      "pinyin": "Yuxi",
+      "adcode": "530400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "baoshan",
+      "name": "保山",
+      "officialName": "保山市",
+      "pinyin": "Baoshan",
+      "adcode": "530500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhaotong",
+      "name": "昭通",
+      "officialName": "昭通市",
+      "pinyin": "Zhaotong",
+      "adcode": "530600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "lijiang",
+      "name": "丽江",
+      "officialName": "丽江市",
+      "pinyin": "Lijiang",
+      "adcode": "530700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "puer",
+      "name": "普洱",
+      "officialName": "普洱市",
+      "pinyin": "Puer",
+      "adcode": "530800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "lincang",
+      "name": "临沧",
+      "officialName": "临沧市",
+      "pinyin": "Lincang",
+      "adcode": "530900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "chuxiongyizuzizhizhou",
+      "name": "楚雄彝族自治州",
+      "officialName": "楚雄彝族自治州",
+      "pinyin": "Chuxiongyizuzizhizhou",
+      "adcode": "532300",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "honghehanizuyizuzizhizhou",
+      "name": "红河哈尼族彝族自治州",
+      "officialName": "红河哈尼族彝族自治州",
+      "pinyin": "Honghehanizuyizuzizhizhou",
+      "adcode": "532500",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "wenshanzhuangzumiaozuzizhizhou",
+      "name": "文山壮族苗族自治州",
+      "officialName": "文山壮族苗族自治州",
+      "pinyin": "Wenshanzhuangzumiaozuzizhizhou",
+      "adcode": "532600",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "xishuangbannadaizuzizhizhou",
+      "name": "西双版纳傣族自治州",
+      "officialName": "西双版纳傣族自治州",
+      "pinyin": "Xishuangbannadaizuzizhizhou",
+      "adcode": "532800",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "dalibaizuzizhizhou",
+      "name": "大理白族自治州",
+      "officialName": "大理白族自治州",
+      "pinyin": "Dalibaizuzizhizhou",
+      "adcode": "532900",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "dehongdaizujingpozuzizhizhou",
+      "name": "德宏傣族景颇族自治州",
+      "officialName": "德宏傣族景颇族自治州",
+      "pinyin": "Dehongdaizujingpozuzizhizhou",
+      "adcode": "533100",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "nujianglisuzuzizhizhou",
+      "name": "怒江傈僳族自治州",
+      "officialName": "怒江傈僳族自治州",
+      "pinyin": "Nujianglisuzuzizhizhou",
+      "adcode": "533300",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "diqingzangzuzizhizhou",
+      "name": "迪庆藏族自治州",
+      "officialName": "迪庆藏族自治州",
+      "pinyin": "Diqingzangzuzizhizhou",
+      "adcode": "533400",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "lhasa",
+      "name": "拉萨",
+      "officialName": "拉萨市",
+      "pinyin": "Lhasa",
+      "adcode": "540100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "rikaze",
+      "name": "日喀则",
+      "officialName": "日喀则市",
+      "pinyin": "Rikaze",
+      "adcode": "540200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "changdou",
+      "name": "昌都",
+      "officialName": "昌都市",
+      "pinyin": "Changdou",
+      "adcode": "540300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "linzhi",
+      "name": "林芝",
+      "officialName": "林芝市",
+      "pinyin": "Linzhi",
+      "adcode": "540400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shannan",
+      "name": "山南",
+      "officialName": "山南市",
+      "pinyin": "Shannan",
+      "adcode": "540500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "naqu",
+      "name": "那曲",
+      "officialName": "那曲市",
+      "pinyin": "Naqu",
+      "adcode": "540600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "alidiqu",
+      "name": "阿里地区",
+      "officialName": "阿里地区",
+      "pinyin": "Alidiqu",
+      "adcode": "542500",
+      "level": "prefecture"
+    },
+    {
+      "id": "xian",
+      "name": "西安",
+      "officialName": "西安市",
+      "pinyin": "Xi'an",
+      "adcode": "610100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tongchuan",
+      "name": "铜川",
+      "officialName": "铜川市",
+      "pinyin": "Tongchuan",
+      "adcode": "610200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "baoji",
+      "name": "宝鸡",
+      "officialName": "宝鸡市",
+      "pinyin": "Baoji",
+      "adcode": "610300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "xianyang",
+      "name": "咸阳",
+      "officialName": "咸阳市",
+      "pinyin": "Xianyang",
+      "adcode": "610400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "weinan",
+      "name": "渭南",
+      "officialName": "渭南市",
+      "pinyin": "Weinan",
+      "adcode": "610500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yanan",
+      "name": "延安",
+      "officialName": "延安市",
+      "pinyin": "Yanan",
+      "adcode": "610600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hanzhong",
+      "name": "汉中",
+      "officialName": "汉中市",
+      "pinyin": "Hanzhong",
+      "adcode": "610700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "yulin-610800",
+      "name": "榆林",
+      "officialName": "榆林市",
+      "pinyin": "Yulin",
+      "adcode": "610800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "ankang",
+      "name": "安康",
+      "officialName": "安康市",
+      "pinyin": "Ankang",
+      "adcode": "610900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shangluo",
+      "name": "商洛",
+      "officialName": "商洛市",
+      "pinyin": "Shangluo",
+      "adcode": "611000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "lanzhou",
+      "name": "兰州",
+      "officialName": "兰州市",
+      "pinyin": "Lanzhou",
+      "adcode": "620100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jiayuguan",
+      "name": "嘉峪关",
+      "officialName": "嘉峪关市",
+      "pinyin": "Jiayuguan",
+      "adcode": "620200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jinchang",
+      "name": "金昌",
+      "officialName": "金昌市",
+      "pinyin": "Jinchang",
+      "adcode": "620300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "baiyin",
+      "name": "白银",
+      "officialName": "白银市",
+      "pinyin": "Baiyin",
+      "adcode": "620400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tianshui",
+      "name": "天水",
+      "officialName": "天水市",
+      "pinyin": "Tianshui",
+      "adcode": "620500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wuwei",
+      "name": "武威",
+      "officialName": "武威市",
+      "pinyin": "Wuwei",
+      "adcode": "620600",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhangye",
+      "name": "张掖",
+      "officialName": "张掖市",
+      "pinyin": "Zhangye",
+      "adcode": "620700",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "pingliang",
+      "name": "平凉",
+      "officialName": "平凉市",
+      "pinyin": "Pingliang",
+      "adcode": "620800",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "jiuquan",
+      "name": "酒泉",
+      "officialName": "酒泉市",
+      "pinyin": "Jiuquan",
+      "adcode": "620900",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "qingyang",
+      "name": "庆阳",
+      "officialName": "庆阳市",
+      "pinyin": "Qingyang",
+      "adcode": "621000",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "dingxi",
+      "name": "定西",
+      "officialName": "定西市",
+      "pinyin": "Dingxi",
+      "adcode": "621100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "longnan",
+      "name": "陇南",
+      "officialName": "陇南市",
+      "pinyin": "Longnan",
+      "adcode": "621200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "linxiahuizuzizhizhou",
+      "name": "临夏回族自治州",
+      "officialName": "临夏回族自治州",
+      "pinyin": "Linxiahuizuzizhizhou",
+      "adcode": "622900",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "gannanzangzuzizhizhou",
+      "name": "甘南藏族自治州",
+      "officialName": "甘南藏族自治州",
+      "pinyin": "Gannanzangzuzizhizhou",
+      "adcode": "623000",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "xining",
+      "name": "西宁",
+      "officialName": "西宁市",
+      "pinyin": "Xining",
+      "adcode": "630100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "haidong",
+      "name": "海东",
+      "officialName": "海东市",
+      "pinyin": "Haidong",
+      "adcode": "630200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "haibeizangzuzizhizhou",
+      "name": "海北藏族自治州",
+      "officialName": "海北藏族自治州",
+      "pinyin": "Haibeizangzuzizhizhou",
+      "adcode": "632200",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "huangnanzangzuzizhizhou",
+      "name": "黄南藏族自治州",
+      "officialName": "黄南藏族自治州",
+      "pinyin": "Huangnanzangzuzizhizhou",
+      "adcode": "632300",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "hainanzangzuzizhizhou",
+      "name": "海南藏族自治州",
+      "officialName": "海南藏族自治州",
+      "pinyin": "Hainanzangzuzizhizhou",
+      "adcode": "632500",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "guoluozangzuzizhizhou",
+      "name": "果洛藏族自治州",
+      "officialName": "果洛藏族自治州",
+      "pinyin": "Guoluozangzuzizhizhou",
+      "adcode": "632600",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "yushuzangzuzizhizhou",
+      "name": "玉树藏族自治州",
+      "officialName": "玉树藏族自治州",
+      "pinyin": "Yushuzangzuzizhizhou",
+      "adcode": "632700",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "haiximengguzuzangzuzizhizhou",
+      "name": "海西蒙古族藏族自治州",
+      "officialName": "海西蒙古族藏族自治州",
+      "pinyin": "Haiximengguzuzangzuzizhizhou",
+      "adcode": "632800",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "yinchuan",
+      "name": "银川",
+      "officialName": "银川市",
+      "pinyin": "Yinchuan",
+      "adcode": "640100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "shizuishan",
+      "name": "石嘴山",
+      "officialName": "石嘴山市",
+      "pinyin": "Shizuishan",
+      "adcode": "640200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "wuzhong",
+      "name": "吴忠",
+      "officialName": "吴忠市",
+      "pinyin": "Wuzhong",
+      "adcode": "640300",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "guyuan",
+      "name": "固原",
+      "officialName": "固原市",
+      "pinyin": "Guyuan",
+      "adcode": "640400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "zhongwei",
+      "name": "中卫",
+      "officialName": "中卫市",
+      "pinyin": "Zhongwei",
+      "adcode": "640500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "urumqi",
+      "name": "乌鲁木齐",
+      "officialName": "乌鲁木齐市",
+      "pinyin": "Urumqi",
+      "adcode": "650100",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "kelamayi",
+      "name": "克拉玛依",
+      "officialName": "克拉玛依市",
+      "pinyin": "Kelamayi",
+      "adcode": "650200",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "tulufan",
+      "name": "吐鲁番",
+      "officialName": "吐鲁番市",
+      "pinyin": "Tulufan",
+      "adcode": "650400",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "hami",
+      "name": "哈密",
+      "officialName": "哈密市",
+      "pinyin": "Hami",
+      "adcode": "650500",
+      "level": "prefecture-city"
+    },
+    {
+      "id": "changjihuizuzizhizhou",
+      "name": "昌吉回族自治州",
+      "officialName": "昌吉回族自治州",
+      "pinyin": "Changjihuizuzizhizhou",
+      "adcode": "652300",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "boertalamengguzizhizhou",
+      "name": "博尔塔拉蒙古自治州",
+      "officialName": "博尔塔拉蒙古自治州",
+      "pinyin": "Boertalamengguzizhizhou",
+      "adcode": "652700",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "bayinguolengmengguzizhizhou",
+      "name": "巴音郭楞蒙古自治州",
+      "officialName": "巴音郭楞蒙古自治州",
+      "pinyin": "Bayinguolengmengguzizhizhou",
+      "adcode": "652800",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "akesudiqu",
+      "name": "阿克苏地区",
+      "officialName": "阿克苏地区",
+      "pinyin": "Akesudiqu",
+      "adcode": "652900",
+      "level": "prefecture"
+    },
+    {
+      "id": "kezileisukeerkezizizhizhou",
+      "name": "克孜勒苏柯尔克孜自治州",
+      "officialName": "克孜勒苏柯尔克孜自治州",
+      "pinyin": "Kezileisukeerkezizizhizhou",
+      "adcode": "653000",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "kashidiqu",
+      "name": "喀什地区",
+      "officialName": "喀什地区",
+      "pinyin": "Kashidiqu",
+      "adcode": "653100",
+      "level": "prefecture"
+    },
+    {
+      "id": "hetiandiqu",
+      "name": "和田地区",
+      "officialName": "和田地区",
+      "pinyin": "Hetiandiqu",
+      "adcode": "653200",
+      "level": "prefecture"
+    },
+    {
+      "id": "yilihasakezizhizhou",
+      "name": "伊犁哈萨克自治州",
+      "officialName": "伊犁哈萨克自治州",
+      "pinyin": "Yilihasakezizhizhou",
+      "adcode": "654000",
+      "level": "autonomous-prefecture"
+    },
+    {
+      "id": "tachengdiqu",
+      "name": "塔城地区",
+      "officialName": "塔城地区",
+      "pinyin": "Tachengdiqu",
+      "adcode": "654200",
+      "level": "prefecture"
+    },
+    {
+      "id": "aleitaidiqu",
+      "name": "阿勒泰地区",
+      "officialName": "阿勒泰地区",
+      "pinyin": "Aleitaidiqu",
+      "adcode": "654300",
+      "level": "prefecture"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "total": 11616,
+  "cityCount": 337,
+  "categoryCounts": {
+    "景点": 1608,
+    "美食": 1602,
+    "文化艺术": 1560,
+    "购物": 1559,
+    "公园自然": 1323,
+    "历史遗迹": 1322,
+    "夜生活": 1322,
+    "亲子游": 1320
+  },
+  "withTrustedOpeningHours": 9859,
+  "withTrustedPrice": 2684,
+  "withTrustedImages": 11436,
+  "source": {
+    "provider": "amap",
+    "endpoint": "https://restapi.amap.com/v3/place/text",
+    "coordinateSystem": "GCJ-02",
+    "api": "AMap Web Service keyword search"
+  },
+  "citySource": {
+    "name": "民政部 2024年中华人民共和国县以上行政区划代码",
+    "url": "https://www.mca.gov.cn/mzsj/xzqh/2025/202401xzqh.html",
+    "scope": "Mainland China municipalities and prefecture-level administrative divisions",
+    "retrievedAt": "2026-06-02"
+  },
+  "cleanedAt": "2026-06-02T14:46:23.687Z"
+}
