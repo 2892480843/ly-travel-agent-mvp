@@ -1,5 +1,6 @@
 import type { AiResponse, AiToolCall, MapPoint, Poi, RouteMode, TicketProduct, TicketSlot } from "../src/types";
 import type { GeocodeResult, MapProvider, MapProviderMeta, NearbyPoi, PoiSearchResult, ReverseGeocodeResult, RouteRequest, WeatherResult } from "./mapProvider";
+import { DEFAULT_CITY_ID, DEFAULT_TICKET_DEMO_POI_ID, DEFAULT_TICKET_POI_NAME, DEFAULT_TICKET_ROUTE } from "./config/city";
 
 export type TravelAgentDependencies = {
   mapProvider: MapProvider;
@@ -14,11 +15,10 @@ export type TravelAgentDependencies = {
   };
 };
 
-const DEFAULT_CITY_ID = "hangzhou";
-const LEIFENG_TICKET_POI_ID = "ticket-leifeng-demo";
+const UNSUPPORTED_STABLE_POI_KEYWORD = "未接入稳定POI";
 const TICKET_INTENT_PATTERN = /预约|票|门票|核销|订单|库存|余票|演出|支付/;
 const SUPPORTED_TICKET_POIS = [
-  { id: LEIFENG_TICKET_POI_ID, name: "雷峰塔", keywords: ["雷峰塔", "雷峰"] }
+  { id: DEFAULT_TICKET_DEMO_POI_ID, name: DEFAULT_TICKET_POI_NAME, keywords: [DEFAULT_TICKET_POI_NAME, "黄鹤"] }
 ];
 
 export async function runTravelAgent(input: string, dependencies: TravelAgentDependencies): Promise<AiResponse> {
@@ -102,22 +102,22 @@ function inferIntent(query: string) {
 }
 
 function resolvePlaceKeyword(query: string) {
-  if (/雷峰|雷峰塔/.test(query)) return "雷峰塔";
-  if (/灵隐|飞来峰/.test(query)) return "灵隐寺";
-  if (/西溪|湿地/.test(query)) return "西溪湿地";
-  if (/湖滨/.test(query)) return "湖滨";
-  if (/西湖|断桥|苏堤|白堤|游船/.test(query)) return "西湖";
-  return "西湖";
+  if (/东湖|楚河|汉街|户部巷/.test(query)) return UNSUPPORTED_STABLE_POI_KEYWORD;
+  if (/黄鹤|黄鹤楼/.test(query)) return DEFAULT_TICKET_POI_NAME;
+  if (/湖北省博物馆|省博|博物馆/.test(query)) return "湖北省博物馆";
+  if (/江汉关/.test(query)) return "江汉关博物馆";
+  if (/江滩/.test(query)) return "汉口江滩";
+  if (/动物园|亲子|孩子|儿童/.test(query)) return "武汉动物园";
+  if (/美食|吃|餐厅|小吃|咖啡|茶|夜市/.test(query)) return "美食";
+  return DEFAULT_TICKET_POI_NAME;
 }
 
 function resolvePoiKeyword(query: string, placeKeyword: string) {
+  if (placeKeyword === UNSUPPORTED_STABLE_POI_KEYWORD) return UNSUPPORTED_STABLE_POI_KEYWORD;
   if (/美食|吃|餐厅|小吃|咖啡|茶/.test(query)) return "美食";
   if (/亲子|孩子|儿童|研学/.test(query)) return "亲子";
   if (/活动|展览|演出|博物馆/.test(query)) return "文化";
-  if (placeKeyword === "灵隐寺") return "灵隐";
-  if (placeKeyword === "西溪湿地") return "西溪";
-  if (placeKeyword === "西湖" && /西湖|断桥|苏堤|白堤|游船/.test(query)) return "西湖";
-  return placeKeyword === "西湖" ? "" : placeKeyword;
+  return placeKeyword;
 }
 
 function inferRouteMode(query: string): RouteMode {
@@ -353,8 +353,8 @@ function poiToCard(poi: NearbyPoi) {
     title: poi.name,
     subtitle: `${meta.join(" · ")} · ${poi.address ?? "地址待官方确认"}${poi.source?.provider ? ` · ${poi.source.provider}` : ""}`,
     image: poi.cover,
-    actionLabel: poi.name.includes("雷峰塔") ? "查看票务候选" : "加入行程",
-    href: poi.name.includes("雷峰塔") ? "/ticket/leifeng" : "/plan"
+    actionLabel: poi.name.includes(DEFAULT_TICKET_POI_NAME) ? "查看票务候选" : "加入行程",
+    href: poi.name.includes(DEFAULT_TICKET_POI_NAME) ? DEFAULT_TICKET_ROUTE : "/plan"
   };
 }
 
@@ -362,10 +362,10 @@ function ticketCard(ticketResult: ReturnType<typeof resolveTicketCandidates>) {
   const product = ticketResult.products[0];
   const slot = ticketResult.slots[0];
   return {
-    id: "ticket-leifeng",
+    id: DEFAULT_TICKET_DEMO_POI_ID,
     title: `${ticketResult.poiName ?? "景区"}票务候选`,
     subtitle: `${slot?.time ?? "时段待确认"} · ${product?.name ?? "候选待确认"} · sandbox 非实时库存/价格`,
-    href: "/ticket/leifeng",
+    href: DEFAULT_TICKET_ROUTE,
     actionLabel: "去确认"
   };
 }

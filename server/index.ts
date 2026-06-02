@@ -33,6 +33,7 @@ import {
   verifyVoucher
 } from "./repositories";
 import { runTravelAgent } from "./travelAgent";
+import { DEFAULT_CITY_ID, DEFAULT_TICKET_DEMO_POI_ID } from "./config/city";
 
 const root = process.cwd();
 loadLocalEnv(root);
@@ -107,7 +108,7 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === "POST" && url.pathname === "/api/itineraries/generate") {
       const body = await readBody<{ days?: number; preferences?: string[]; cityId?: string }>(request);
-      const cityId = body.cityId ?? "hangzhou";
+      const cityId = body.cityId ?? DEFAULT_CITY_ID;
       const candidates = pois.filter((poi) => poi.cityId === cityId).slice(0, 12);
       sendJson(response, {
         cityId,
@@ -134,7 +135,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && url.pathname === "/api/tickets/options") {
-      const poiId = url.searchParams.get("poiId") ?? "ticket-leifeng-demo";
+      const poiId = url.searchParams.get("poiId") ?? DEFAULT_TICKET_DEMO_POI_ID;
       const visitDate = url.searchParams.get("visitDate") ?? undefined;
       sendJson(response, getTicketOptions(poiId, visitDate));
       return;
@@ -367,7 +368,7 @@ function unquoteEnvValue(value: string) {
 
 function searchPois(url: URL) {
   const keyword = url.searchParams.get("keyword")?.trim().toLowerCase() ?? "";
-  const cityId = url.searchParams.get("cityId") ?? "";
+  const cityId = url.searchParams.get("cityId") ?? DEFAULT_CITY_ID;
   const category = url.searchParams.get("category") as PoiCategory | null;
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 24), 100);
 
@@ -389,7 +390,7 @@ function mapSearchInput(url: URL): PoiSearchInput {
   const lat = latParam === null ? Number.NaN : Number(latParam);
   const input: PoiSearchInput = {
     keyword: url.searchParams.get("keyword") ?? undefined,
-    cityId: url.searchParams.get("cityId") ?? "hangzhou",
+    cityId: url.searchParams.get("cityId") ?? DEFAULT_CITY_ID,
     category: url.searchParams.get("category") as PoiCategory | undefined,
     limit: Number(url.searchParams.get("limit") ?? 10),
     radius: Number(url.searchParams.get("radius") ?? 3000)

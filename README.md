@@ -76,7 +76,7 @@ npm run build
 | `VITE_AMAP_SECURITY_JS_CODE` / `VITE_AMAP_SERVICE_HOST` | 高德 JSAPI 安全配置；本地开发可用 `securityJsCode`，生产环境优先配置代理服务 |
 | `PAYMENT_PROVIDER=sandbox` | 本地演示支付 provider；生产禁止使用 `sandbox` |
 | `PAYMENT_API_BASE_URL` / `PAYMENT_API_KEY` / `PAYMENT_WEBHOOK_SECRET` | 非 sandbox 支付 provider 的基础接入材料；真实厂商协议未接入前 adapter 会 fail-closed |
-| `TICKET_PROVIDER=sandbox` | 本地雷峰塔演示票务 provider；生产禁止使用 `sandbox` |
+| `TICKET_PROVIDER=sandbox` | 本地黄鹤楼演示票务 provider；不代表真实官方库存、出票或支付，生产禁止使用 `sandbox` |
 | `TICKET_API_BASE_URL` / `TICKET_API_TOKEN` / `TICKET_API_SECRET` | 非 sandbox 票务 provider 的基础接入材料；真实厂商接口未接入前 adapter 会 fail-closed |
 
 无真实支付、地图、票务或模型 Key 时，本地演示可使用 `sandbox` 或 `fallback` provider，敏感状态仍由服务端维护。生产模式会 fail fast：默认 `AUTH_SESSION_SECRET`、`PAYMENT_PROVIDER=sandbox`、`TICKET_PROVIDER=sandbox` 或非 sandbox provider 缺少必要密钥都会阻止启动或 readiness 通过。
@@ -97,9 +97,9 @@ npm run smoke:api
 Agent 与地图接口可单独验收：
 
 ```bash
-curl -s http://localhost:8787/api/maps/pois/nearby?cityId=hangzhou\&keyword=西湖\&limit=2
+curl -s http://localhost:8787/api/maps/pois/nearby?cityId=wuhan\&keyword=黄鹤楼\&limit=2
 curl -s -X POST http://localhost:8787/api/maps/route -H 'Content-Type: application/json' -d '{"mode":"walking"}'
-curl -s -X POST http://localhost:8787/api/agent/chat -H 'Content-Type: application/json' -d '{"input":"西湖一日游，带老人，少排队"}'
+curl -s -X POST http://localhost:8787/api/agent/chat -H 'Content-Type: application/json' -d '{"input":"黄鹤楼一日游，带老人，少排队"}'
 ```
 
 浏览器地图联调需在 `.env` 中补充高德 JSAPI 配置：
@@ -113,9 +113,9 @@ VITE_AMAP_SECURITY_JS_CODE=your-amap-jsapi-security-code
 
 ## 演示脚本
 
-1. 游客端：首页进入“推荐”，筛选杭州真实 POI，查看灵隐寺详情。
-2. AI 助手：输入“西湖一日游，带老人，少排队”，观察工具调用状态、置信度和推荐卡片。
-3. 票务：进入“雷峰塔预约”，选择票种、日期、时段、数量，提交订单前会先锁定库存。
+1. 游客端：首页进入“推荐”，筛选武汉真实 POI，查看黄鹤楼详情。
+2. AI 助手：输入“黄鹤楼一日游，带老人，少排队”，观察工具调用状态、置信度和推荐卡片。
+3. 票务：进入“黄鹤楼预约”，选择票种、日期、时段、数量，提交订单前会先锁定 sandbox 候选库存。
 4. 支付：在支付页点击“演示支付”，服务端创建 sandbox 支付并确认票务，进入电子凭证，再到“我的行程”查看订单。
 5. 权限：尝试以游客进入运营后台，再切换管理员访问全部。
 6. 运营端：进入看板查看 API/fallback 指标；在商户管理新增商户并同步库存。
@@ -126,7 +126,7 @@ VITE_AMAP_SECURITY_JS_CODE=your-amap-jsapi-security-code
 
 | 验收项 | 步骤 |
 |---|---|
-| 真实 POI | 推荐页显示杭州真实 POI；API 启动后 `/api/pois?cityId=hangzhou` 返回全量杭州数据 |
+| 真实 POI | 推荐页显示武汉真实 POI；API 启动后 `/api/pois?cityId=wuhan` 返回武汉数据 |
 | AI fallback | 不配置 key 时，AI 助手仍可回答并提示来源 |
 | Agent 编排 | `/api/agent/chat` 返回中文建议、推荐卡片、工具调用状态和来源说明 |
 | 高德地图 | 配置 `MAP_PROVIDER=amap`、`MAP_API_KEY` 后服务端地图接口优先调用高德；配置 `VITE_AMAP_JS_KEY` 后 `/map` 页面渲染高德 JS 地图；无 Key 或失败时返回/展示 fallback |

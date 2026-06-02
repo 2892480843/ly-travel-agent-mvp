@@ -4,50 +4,50 @@ import { createMapProvider } from "./mapProvider";
 import { runTravelAgent } from "./travelAgent";
 
 const cities: City[] = [
-  { id: "hangzhou", name: "杭州", officialName: "杭州市", pinyin: "hangzhou", adcode: "330100", level: "city" }
+  { id: "wuhan", name: "武汉", officialName: "武汉市", pinyin: "wuhan", adcode: "420100", level: "prefecture-city" }
 ];
 
 const pois: Poi[] = [
   {
-    id: "local-west-lake",
-    name: "西湖",
-    cityId: "hangzhou",
+    id: "wuhan-b001b0i4k0",
+    name: "黄鹤楼",
+    cityId: "wuhan",
     category: "景点",
     tags: ["景点", "少排队"],
-    lng: 120.148872,
-    lat: 30.245185,
+    lng: 114.302409,
+    lat: 30.544404,
     coordinateSystem: "GCJ-02",
-    address: "杭州市西湖区",
+    address: "武汉市武昌区蛇山西山坡特1号",
     rating: 4.9
   },
   {
-    id: "local-leifeng",
-    name: "雷峰塔",
-    cityId: "hangzhou",
-    category: "历史遗迹",
-    tags: ["景点", "历史"],
-    lng: 120.148234,
-    lat: 30.233501,
+    id: "local-hubei-museum",
+    name: "湖北省博物馆",
+    cityId: "wuhan",
+    category: "文化艺术",
+    tags: ["景点", "文化"],
+    lng: 114.365516,
+    lat: 30.561728,
     coordinateSystem: "GCJ-02",
-    address: "南山路15号",
+    address: "武汉市武昌区东湖路160号",
     rating: 4.7
   },
   {
     id: "local-food",
-    name: "湖滨杭帮菜",
-    cityId: "hangzhou",
+    name: "肥肥虾庄",
+    cityId: "wuhan",
     category: "美食",
     tags: ["美食"],
-    lng: 120.1601,
-    lat: 30.251,
+    lng: 114.284855,
+    lat: 30.581833,
     coordinateSystem: "GCJ-02",
-    address: "湖滨路",
+    address: "江汉路M+购物中心",
     rating: 4.6
   }
 ];
 
 const products: TicketProduct[] = [
-  { id: "adult", poiId: "ticket-leifeng-demo", name: "成人票", desc: "sandbox candidate", price: 55, stock: 20, status: "available" }
+  { id: "adult", poiId: "ticket-yellow-crane-tower-demo", name: "成人票", desc: "sandbox candidate", price: 55, stock: 20, status: "available" }
 ];
 
 const slots: TicketSlot[] = [
@@ -55,20 +55,20 @@ const slots: TicketSlot[] = [
 ];
 
 describe("travelAgent", () => {
-  it("returns POI cards for the West Lake one-day quick question", async () => {
-    const response = await runTravelAgent("西湖一日游，带老人，少排队", {
+  it("returns POI cards for the Yellow Crane Tower one-day quick question", async () => {
+    const response = await runTravelAgent("黄鹤楼一日游，带老人，少排队", {
       mapProvider: createMapProvider({ pois, cities }, { provider: "amap", apiKey: "" }),
       getTicketOptions: () => ({ products, slots })
     });
 
-    expect(response.text).toContain("西湖");
+    expect(response.text).toContain("黄鹤楼");
     expect(response.cards.length).toBeGreaterThan(0);
-    expect(response.cards[0]?.title).toContain("西湖");
+    expect(response.cards[0]?.title).toContain("黄鹤楼");
     expect(response.toolCalls.find((tool) => tool.name === "POI 搜索")?.status).toBe("success");
   });
 
   it("returns AiResponse with cards, tool calls, and safe source notes", async () => {
-    const response = await runTravelAgent("帮我预约雷峰塔上午票，带老人少排队", {
+    const response = await runTravelAgent("帮我预约黄鹤楼上午票，带老人少排队", {
       mapProvider: createMapProvider({ pois, cities }, { provider: "amap", apiKey: "" }),
       getTicketOptions: () => ({ products, slots })
     });
@@ -94,17 +94,17 @@ describe("travelAgent", () => {
     expect(response.toolCalls.find((tool) => tool.name === "天气查询")?.status).toBe("skipped");
   });
 
-  it("does not return Lei Feng Tower ticket candidates for unsupported ticket places", async () => {
+  it("does not return Yellow Crane Tower ticket candidates for unsupported or unstable ticket places", async () => {
     const getTicketOptions = vi.fn(() => ({ products, slots }));
 
-    const response = await runTravelAgent("帮我预约灵隐寺门票", {
+    const response = await runTravelAgent("帮我预约东湖门票", {
       mapProvider: createMapProvider({ pois, cities }, { provider: "amap", apiKey: "" }),
       getTicketOptions
     });
 
     expect(getTicketOptions).not.toHaveBeenCalled();
     expect(response.text).toContain("当前未返回可用票务候选");
-    expect(response.cards.some((card) => card.title.includes("雷峰塔票务候选"))).toBe(false);
+    expect(response.cards.some((card) => card.title.includes("黄鹤楼票务候选"))).toBe(false);
     expect(response.toolCalls.find((tool) => tool.name === "票务候选")?.status).toBe("skipped");
     expect(response.toolCalls.find((tool) => tool.name === "票务候选")?.summary).toContain("未命中已接入");
     expect(response.sourceNote).toContain("票务：未返回可用候选");
@@ -117,7 +117,7 @@ describe("travelAgent", () => {
       ]
     }), { status: 200 }));
 
-    const response = await runTravelAgent("帮我预约雷峰塔上午票", {
+    const response = await runTravelAgent("帮我预约黄鹤楼上午票", {
       mapProvider: createMapProvider({ pois, cities }, { provider: "amap", apiKey: "" }),
       getTicketOptions: () => ({ products, slots }),
       aiProvider: {

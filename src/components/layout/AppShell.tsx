@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Bell, ExternalLink, Globe2, HelpCircle, Menu, Search } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { routes } from "../../data/mockData";
+import { BRAND_NAME, BRAND_NAV_TAGLINE } from "../../config/brand";
+import { DEFAULT_TICKET_ROUTE } from "../../config/city";
 import { demoUsers, fetchCurrentAuth, getCurrentUser, loginAsRole, roleLabel } from "../../services/authService";
 import type { DemoUser, Role } from "../../types";
 
-const topPaths = ["/", "/assistant", "/map", "/plan", "/ticket/leifeng", "/recommend", "/packages", "/admin/dashboard"];
+const topPaths = ["/", "/assistant", "/map", "/plan", DEFAULT_TICKET_ROUTE, "/recommend", "/packages", "/admin/dashboard"];
 const adminGroups = [
   "/admin/dashboard",
   "/admin/content",
@@ -30,8 +32,8 @@ export function TopNav() {
       <NavLink to="/" className="brand">
         <span className="logo" />
         <span className="brand-copy">
-          生活智能体 · 文旅体
-          <small>Hangzhou Smart Culture Travel</small>
+          {BRAND_NAME}
+          <small>{BRAND_NAV_TAGLINE}</small>
         </span>
       </NavLink>
       <nav className={`nav-links ${navOpen ? "open" : ""}`} aria-label="游客端主导航">
@@ -42,8 +44,8 @@ export function TopNav() {
             .replace("游客端首页", "首页")
             .replace("AI旅行助手", "AI助手")
             .replace("平台导航", "智能导览")
-            .replace("杭州三日游规划", "行程规划")
-            .replace("雷峰塔预约", "票务预约")
+            .replace("武汉三日游规划", "行程规划")
+            .replace("黄鹤楼预约", "票务预约")
             .replace("个性化推荐", "推荐")
             .replace("智能套餐", "商旅联动")
             .replace("运营看板", "运营入口");
@@ -82,10 +84,10 @@ export function AdminSidebar() {
   return (
     <aside className="side">
       <NavLink to="/admin/dashboard" className="brand">
-        <span className="admin-logo">Z</span>
-        <span>
-          生活智能体 · 文旅体
-          <small>智慧文旅运营平台</small>
+        <span className="logo" aria-hidden="true" />
+        <span className="brand-copy">
+          {BRAND_NAME}
+          <small>{BRAND_NAV_TAGLINE}</small>
         </span>
       </NavLink>
       <nav aria-label="运营端侧边导航">
@@ -100,7 +102,16 @@ export function AdminSidebar() {
           );
         })}
       </nav>
-      <div className="side-visual" />
+      <div className="side-visual" aria-label="运营态势摘要">
+        <div className="side-visual-copy">
+          <span>今日态势</span>
+          <strong>客流平稳</strong>
+          <div className="side-visual-metrics">
+            <span><b>45s</b><small>延迟</small></span>
+            <span><b>98%</b><small>在线</small></span>
+          </div>
+        </div>
+      </div>
       <div className="side-foot">
         <span className="avatar" />
         <div>
@@ -115,10 +126,10 @@ export function AdminSidebar() {
 function AdminTopBar() {
   return (
     <header className="admin-top">
-      <div className="admin-search">
+      <label className="admin-search">
         <Search size={17} />
-        <span>搜索商户、订单、知识库、工单...</span>
-      </div>
+        <input aria-label="运营台全局搜索" placeholder="搜索商户、订单、知识库、工单..." />
+      </label>
       <div className="nav-actions">
         <button className="nav-icon-btn" aria-label="运营告警"><Bell size={19} /></button>
         <span className="badge-dot">18</span>

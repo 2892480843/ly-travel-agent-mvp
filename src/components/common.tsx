@@ -2,12 +2,16 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Bot,
+  Camera,
+  CalendarCheck,
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Languages,
   Loader2,
   MapPin,
   MessageSquareText,
+  Mic,
   Navigation,
   QrCode,
   Send,
@@ -37,6 +41,7 @@ import {
 } from "recharts";
 import type { AiResponse, MapPoint, MetricItem, Poi, RouteResult, ScenicSpot, StatusTone, TimelineItem, WorkflowNode } from "../types";
 import { channelData, spotImages, trafficData, workflowNodes } from "../data/mockData";
+import { DEFAULT_CITY_CENTER, DEFAULT_CITY_NAME, DEFAULT_TICKET_POI_NAME, DEFAULT_TICKET_ROUTE } from "../config/city";
 import { askTravelAssistant } from "../services/aiService";
 
 export function StatusTag({ children, tone = "blue" }: { children: ReactNode; tone?: StatusTone }) {
@@ -74,13 +79,13 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="dashboard-title">
+    <div className="dashboard-title page-header">
       <div>
         {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
         <h1>{title}</h1>
         {subtitle ? <p className="muted">{subtitle}</p> : null}
       </div>
-      {actions ? <div className="filters">{actions}</div> : null}
+      {actions ? <div className="filters page-header-actions">{actions}</div> : null}
     </div>
   );
 }
@@ -99,13 +104,13 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={`card card-pad ${className}`}>
+    <section className={`section-panel ${className}`}>
       <div className="section-title">
         <div>
           <h2>{title}</h2>
           {subtitle ? <p className="muted">{subtitle}</p> : null}
         </div>
-        {action ?? <span className="subtle-link">更多 <ChevronRight size={14} /></span>}
+        {action ? <div className="section-action">{action}</div> : null}
       </div>
       {children}
     </section>
@@ -171,7 +176,7 @@ export function SpotCard({ spot, compact = false }: { spot: ScenicSpot; compact?
           {spot.price ? <StatusTag tone="orange">￥{spot.price}</StatusTag> : <StatusTag tone="green">免费</StatusTag>}
           {spot.tags.slice(0, 2).map((tag) => <StatusTag key={tag} tone="slate">{tag}</StatusTag>)}
         </div>
-        <p className="reason">为什么推荐你：{spot.reason}</p>
+        <p className="reason"><span className="reason-label">为什么推荐你：</span>{spot.reason}</p>
         {!compact ? (
           <div className="card-meta-row">
             <span><MapPin size={14} /> {spot.location}</span>
@@ -212,7 +217,7 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
   );
 }
 
-const quickQuestions = ["西湖一日游，带老人，少排队", "帮我预约雷峰塔上午票", "推荐西湖周边亲子景点", "杭州最近有什么活动？"];
+const quickQuestions = ["武汉一日游，带老人，少排队", "帮我预约黄鹤楼上午票", "推荐武汉周边亲子景点", "武汉最近有什么活动？"];
 
 type ChatMessage = {
   role: "user" | "ai";
@@ -222,31 +227,32 @@ type ChatMessage = {
 
 export function AIChat() {
   const shouldReduceMotion = useReducedMotion();
+  const chatRef = useRef<HTMLDivElement | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "user", text: "西湖一日游，有哪些必去景点和美食推荐？" },
+    { role: "user", text: "武汉一日游，有哪些必去景点和美食推荐？" },
     {
       role: "ai",
-      text: "为你生成经典轻松路线：断桥残雪 → 白堤 → 苏堤 → 雷峰塔 → 花港观鱼。当前湖滨客流舒适，建议上午步行、下午游船。",
+      text: "为你生成经典轻松路线：黄鹤楼 → 黄鹤楼公园 → 江汉关博物馆 → 汉口江滩。当前客流为演示估算，建议上午登楼、下午江滩慢游。",
       result: {
-        text: "为你生成经典轻松路线：断桥残雪 → 白堤 → 苏堤 → 雷峰塔 → 花港观鱼。当前湖滨客流舒适，建议上午步行、下午游船。",
+        text: "为你生成经典轻松路线：黄鹤楼 → 黄鹤楼公园 → 江汉关博物馆 → 汉口江滩。当前客流为演示估算，建议上午登楼、下午江滩慢游。",
         cards: [],
         toolCalls: [
-          { name: "POI 搜索", status: "success", summary: "命中杭州真实 POI 候选" },
+          { name: "POI 搜索", status: "success", summary: "命中武汉真实 POI 候选" },
           { name: "路线提示", status: "success", summary: "已按轻松游约束生成" }
         ],
         confidence: 0.78,
         sourceNote: "演示初始消息；票务、价格、开放时间以官方接口为准。"
       }
     },
-    { role: "user", text: "帮我把雷峰塔加入预约，并避开排队高峰。" },
+    { role: "user", text: "帮我把黄鹤楼加入预约，并避开排队高峰。" },
     {
       role: "ai",
-      text: "已为你选择 08:00-10:00 候选时段，成人票 2 张，余票充足。请进入订单确认页核对游客信息；本系统当前只做演示支付。",
+      text: "已为你选择 08:00-10:00 sandbox 候选时段，成人票 2 张。请进入订单确认页核对游客信息；本系统当前只做演示支付。",
       result: {
-        text: "已为你选择 08:00-10:00 候选时段，成人票 2 张，余票充足。请进入订单确认页核对游客信息；本系统当前只做演示支付。",
-        cards: [{ id: "ticket-leifeng", title: "雷峰塔上午票", subtitle: "08:00-10:00 · 演示库存充足", href: "/ticket/leifeng", actionLabel: "去确认" }],
+        text: "已为你选择 08:00-10:00 sandbox 候选时段，成人票 2 张。请进入订单确认页核对游客信息；本系统当前只做演示支付。",
+        cards: [{ id: "ticket-yellow-crane-tower", title: "黄鹤楼上午票", subtitle: "08:00-10:00 · sandbox 演示库存", href: DEFAULT_TICKET_ROUTE, actionLabel: "去确认" }],
         toolCalls: [
           { name: "票务库存查询", status: "success", summary: "返回演示库存，真实库存以官方接口为准" }
         ],
@@ -273,14 +279,29 @@ export function AIChat() {
     }
   };
 
+  useEffect(() => {
+    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" });
+  }, [messages.length, loading, shouldReduceMotion]);
+
   return (
     <div className="card card-pad chat-shell">
       <div className="chat-toolbar">
-        <StatusTag tone="blue"><MessageSquareText size={14} /> 文本提问</StatusTag>
-        <StatusTag tone="purple">语音 / 拍照 / 翻译</StatusTag>
-        <span className="muted">内容由 AI 生成，关键票务以官方为准</span>
+        <div className="chat-mode-tabs" aria-label="助手能力入口">
+          {([
+            ["文本提问", MessageSquareText],
+            ["语音问路", Mic],
+            ["拍照识别", Camera],
+            ["菜单翻译", Languages]
+          ] as const).map(([label, Icon], index) => (
+            <span className={`chat-mode-tab${index === 0 ? " is-active" : ""}`} key={label}>
+              <Icon size={16} />
+              {label}
+            </span>
+          ))}
+        </div>
+        <span className="chat-toolbar-note"><ShieldCheck size={14} /> 内容由 AI 生成，关键票务以官方为准</span>
       </div>
-      <div className="chat">
+      <div className="chat" ref={chatRef} aria-label="AI 对话记录">
         {messages.map((message, index) => (
           <motion.div
             className={`bubble ${message.role === "user" ? "user" : "ai"}`}
@@ -288,11 +309,19 @@ export function AIChat() {
             initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
             animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
           >
-            {message.role === "ai" ? <strong><Bot size={16} /> AI助手 10:{32 + index}</strong> : null}
-            <p>{message.text}</p>
+            {message.role === "ai" ? (
+              <div className="chat-message-head">
+                <span className="chat-avatar"><Bot size={16} /></span>
+                <div>
+                  <strong>AI助手</strong>
+                  <small>10:{32 + index}</small>
+                </div>
+              </div>
+            ) : null}
+            <p className="chat-message-text">{message.text}</p>
             {message.role === "ai" ? (
               <>
-                <div className="tool-row">
+                <div className="tool-row chat-tool-row">
                   {(message.result?.toolCalls ?? [
                     { name: "POI 知识库", status: "success", summary: "演示状态" },
                     { name: "票务库存", status: "success", summary: "演示状态" }
@@ -304,21 +333,32 @@ export function AIChat() {
                   ))}
                 </div>
                 {message.result?.cards.length ? (
-                  <div className="grid grid-2" style={{ marginTop: 12 }}>
+                  <div className="chat-result-grid">
                     {message.result.cards.map((card) => (
-                      <a className="spot-card compact" href={card.href ?? "#"} key={card.id}>
-                        {card.image ? <img src={card.image} alt={card.title} /> : <div className="thumb placeholder"><Sparkles size={22} /></div>}
-                        <div>
+                      <a className="chat-result-card" href={card.href ?? "#"} key={card.id}>
+                        {card.image ? <img src={card.image} alt={card.title} /> : (
+                          <span className="chat-result-icon"><CalendarCheck size={24} /></span>
+                        )}
+                        <span className="chat-result-copy">
                           <strong>{card.title}</strong>
                           <p className="muted">{card.subtitle}</p>
-                          {card.actionLabel ? <StatusTag tone="blue">{card.actionLabel}</StatusTag> : null}
-                        </div>
+                        </span>
+                        {card.actionLabel ? <span className="chat-result-action">{card.actionLabel}<ChevronRight size={15} /></span> : null}
                       </a>
                     ))}
                   </div>
                 ) : null}
                 {message.result ? (
-                  <p className="muted">置信度 {(message.result.confidence * 100).toFixed(0)}% · {message.result.sourceNote}</p>
+                  <div className="chat-source-note">
+                    <span className="chat-confidence">
+                      <small>置信度</small>
+                      <strong>{(message.result.confidence * 100).toFixed(0)}%</strong>
+                    </span>
+                    <div className="chat-source-copy">
+                      <ShieldCheck size={14} />
+                      <p>{message.result.sourceNote}</p>
+                    </div>
+                  </div>
                 ) : null}
               </>
             ) : null}
@@ -326,68 +366,84 @@ export function AIChat() {
         ))}
         {loading ? (
           <motion.div className="bubble ai is-loading" initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}>
-            <strong><Bot size={16} /> AI助手</strong>
+            <div className="chat-message-head">
+              <span className="chat-avatar"><Bot size={16} /></span>
+              <div>
+                <strong>AI助手</strong>
+                <small>检索中</small>
+              </div>
+            </div>
             <p><Loader2 size={14} /> 正在检索 POI、票务与路线候选...</p>
           </motion.div>
         ) : null}
       </div>
-      <div className="quick-row">
+      <div className="quick-row chat-quick-row">
         {quickQuestions.map((question) => (
           <button key={question} className="chip" onClick={() => submit(question)}>{question}</button>
         ))}
       </div>
-      <div className="search-pill compact-input">
-        <Bot color="var(--blue)" />
-        <input
+      <div className="search-pill compact-input chat-composer">
+        <span className="chat-composer-icon"><Bot size={18} /></span>
+        <textarea
+          aria-label="输入旅行助手问题"
           placeholder="请输入你的问题，也可以试试拍照识别、语音问路..."
+          rows={2}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") submit();
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              void submit();
+            }
           }}
         />
-        <button className="icon-btn" aria-label="发送问题" disabled={loading || !input.trim()} onClick={() => submit()}><Send size={18} /></button>
+        <div className="chat-composer-tools" aria-label="输入辅助">
+          <button className="chat-tool-btn" type="button" aria-label="语音输入"><Mic size={17} /></button>
+          <button className="chat-tool-btn" type="button" aria-label="拍照识别"><Camera size={17} /></button>
+        </div>
+        <button className="icon-btn" aria-label="发送问题" disabled={loading || !input.trim()} onClick={() => void submit()}><Send size={18} /></button>
       </div>
     </div>
   );
 }
 
 export function TrafficChart({ type = "line" }: { type?: "line" | "area" | "bar"; }) {
-  const chartProps = { data: trafficData, margin: { top: 8, right: 12, left: -18, bottom: 0 } };
+  const chartProps = { data: trafficData, margin: { top: 12, right: 18, left: 8, bottom: 8 } };
   const tooltipStyle = { borderRadius: 8, border: "1px solid var(--line)", boxShadow: "var(--soft-shadow)" };
+  const axisTick = { fill: "var(--muted)", fontSize: 12, fontWeight: 800 };
   return (
     <ResponsiveContainer width="100%" height={250}>
       {type === "bar" ? (
-        <BarChart {...chartProps}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e4edf7" />
-          <XAxis dataKey="time" tickLine={false} axisLine={false} />
-          <YAxis tickLine={false} axisLine={false} />
+        <BarChart {...chartProps} barCategoryGap="24%" barGap={8}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#dde7de" />
+          <XAxis dataKey="time" tick={axisTick} tickLine={false} axisLine={false} />
+          <YAxis width={48} tick={axisTick} tickLine={false} axisLine={false} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Bar dataKey="today" name="今日客流" fill="#176bff" radius={[8, 8, 0, 0]} />
-          <Bar dataKey="ai" name="AI触达" fill="#16c7c7" radius={[8, 8, 0, 0]} />
+          <Bar dataKey="today" name="今日客流" fill="#7ba7c8" maxBarSize={24} radius={[8, 8, 0, 0]} />
+          <Bar dataKey="ai" name="AI触达" fill="#83b8ad" maxBarSize={24} radius={[8, 8, 0, 0]} />
         </BarChart>
       ) : type === "area" ? (
         <AreaChart {...chartProps}>
           <defs>
             <linearGradient id="trafficFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#176bff" stopOpacity={0.32} />
-              <stop offset="100%" stopColor="#176bff" stopOpacity={0.02} />
+              <stop offset="0%" stopColor="#7ba7c8" stopOpacity={0.32} />
+              <stop offset="100%" stopColor="#7ba7c8" stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e4edf7" />
-          <XAxis dataKey="time" tickLine={false} axisLine={false} />
-          <YAxis tickLine={false} axisLine={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#dde7de" />
+          <XAxis dataKey="time" tick={axisTick} tickLine={false} axisLine={false} />
+          <YAxis width={48} tick={axisTick} tickLine={false} axisLine={false} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Area dataKey="today" name="今日客流" stroke="#176bff" fill="url(#trafficFill)" strokeWidth={3} />
+          <Area dataKey="today" name="今日客流" stroke="#7ba7c8" fill="url(#trafficFill)" strokeWidth={3} />
         </AreaChart>
       ) : (
         <LineChart {...chartProps}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e4edf7" />
-          <XAxis dataKey="time" tickLine={false} axisLine={false} />
-          <YAxis tickLine={false} axisLine={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#dde7de" />
+          <XAxis dataKey="time" tick={axisTick} tickLine={false} axisLine={false} />
+          <YAxis width={48} tick={axisTick} tickLine={false} axisLine={false} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Line type="monotone" dataKey="today" name="今日" stroke="#176bff" strokeWidth={3} dot={{ r: 4 }} />
-          <Line type="monotone" dataKey="yesterday" name="昨日" stroke="#b9c8da" strokeWidth={3} dot={false} />
+          <Line type="monotone" dataKey="today" name="今日" stroke="#7ba7c8" strokeWidth={3} dot={{ r: 4 }} />
+          <Line type="monotone" dataKey="yesterday" name="昨日" stroke="#cbd6cf" strokeWidth={3} dot={false} />
         </LineChart>
       )}
     </ResponsiveContainer>
@@ -395,15 +451,32 @@ export function TrafficChart({ type = "line" }: { type?: "line" | "area" | "bar"
 }
 
 export function FunnelPanel() {
+  const totalValue = channelData[0]?.value ?? 0;
+
   return (
     <div className="funnel-panel">
-      {channelData.map((entry, index) => (
-        <div className="funnel-step" key={entry.name} style={{ "--fill": entry.fill, "--w": `${100 - index * 12}%` } as CSSProperties}>
-          <span>{entry.name}</span>
-          <strong>{entry.value.toLocaleString()}</strong>
-          {index > 0 ? <em>{((entry.value / channelData[index - 1].value) * 100).toFixed(2)}%</em> : null}
-        </div>
-      ))}
+      {channelData.map((entry, index) => {
+        const previousValue = channelData[index - 1]?.value;
+        const conversionRate = previousValue ? `${((entry.value / previousValue) * 100).toFixed(2)}%` : "100.00%";
+        const retentionRate = totalValue ? Math.max((entry.value / totalValue) * 100, 8) : 0;
+
+        return (
+          <article
+            className="funnel-step"
+            key={entry.name}
+            style={{ "--fill": entry.fill, "--progress": `${retentionRate}%` } as CSSProperties}
+          >
+            <span className="funnel-index">{String(index + 1).padStart(2, "0")}</span>
+            <div className="funnel-copy">
+              <span>{entry.name}</span>
+              <small>{index === 0 ? "总访问基数" : `较上一步 ${conversionRate}`}</small>
+            </div>
+            <strong>{entry.value.toLocaleString()}</strong>
+            <em>{conversionRate}</em>
+            <div className="funnel-meter" aria-hidden="true"><i /></div>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -469,33 +542,24 @@ export function MapPanel({
   const mapRef = useRef<AMapInstance | null>(null);
   const controlsAddedRef = useRef(false);
   const [mapState, setMapState] = useState<"fallback" | "loading" | "ready">("fallback");
-  const [mapError, setMapError] = useState("");
   const staticPins = [
-    ["雷峰塔", 58, 72, "blue"],
-    ["苏堤春晓", 42, 45, "blue"],
-    ["三潭印月", 61, 40, "cyan"],
-    ["断桥残雪", 76, 22, "red"],
-    ["灵隐寺", 20, 68, "green"],
-    ["花港观鱼", 55, 58, "orange"]
+    ["黄鹤楼", 52, 54, "blue"],
+    ["江汉关", 68, 38, "cyan"],
+    ["汉口江滩", 74, 30, "blue"],
+    ["湖北省博物馆", 38, 42, "green"],
+    ["武汉动物园", 24, 70, "orange"],
+    ["保成路夜市", 60, 72, "red"]
   ];
   const amapKey = import.meta.env.VITE_AMAP_JS_KEY?.trim() ?? "";
   const amapSecurityCode = import.meta.env.VITE_AMAP_SECURITY_JS_CODE?.trim() ?? "";
   const amapServiceHost = import.meta.env.VITE_AMAP_SERVICE_HOST?.trim() ?? "";
-  const points = useMemo(() => mapPoints(route, pois), [pois, route]);
+  const points = useMemo(() => mapMarkerPoints(route, pois), [pois, route]);
   const overlayKey = useMemo(() => points.map((point) => `${point.lng},${point.lat},${point.name ?? ""}`).join("|"), [points]);
   const routePathKey = useMemo(() => (route?.points ?? []).map((point) => `${point.lng},${point.lat}`).join("|"), [route?.points]);
-  const center = points[0] ?? { lng: 120.148872, lat: 30.245185, name: "杭州西湖" };
-  const routeTitle = route
-    ? `推荐路线 | 约 ${(route.distanceMeters / 1000).toFixed(1)} 公里`
-    : "高德地图 | 杭州文旅点位";
-  const routeSubtitle = route
-    ? `${route.durationMinutes} 分钟 · ${route.mode} · ${route.provider}${route.fallback ? " fallback" : ""}`
-    : mapState === "ready" ? "高德 JSAPI 已加载 · GCJ-02 坐标" : "本地静态底图 · GCJ-02 坐标";
-
+  const center = points[0] ?? route?.points[0] ?? { ...DEFAULT_CITY_CENTER, name: DEFAULT_CITY_NAME };
   useEffect(() => {
     if (!amapKey || !containerRef.current) {
       setMapState("fallback");
-      setMapError("");
       return;
     }
 
@@ -509,7 +573,6 @@ export function MapPanel({
     if (Object.keys(securityConfig).length > 0) win._AMapSecurityConfig = securityConfig;
 
     setMapState((current) => current === "ready" ? current : "loading");
-    setMapError("");
 
     loadAmapLoader()
       .then((loader) => loader.load({
@@ -534,10 +597,9 @@ export function MapPanel({
         renderAmapOverlays(AMap, mapRef.current, points, route?.points ?? []);
         setMapState("ready");
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (cancelled) return;
         setMapState("fallback");
-        setMapError(error instanceof Error ? error.message : "AMap JSAPI loading failed");
       });
 
     return () => {
@@ -576,10 +638,6 @@ export function MapPanel({
       <span className={`map-status ${mapState === "ready" ? "ready" : ""}`}>
         {mapState === "loading" ? "高德地图加载中" : mapState === "ready" ? "高德地图" : "本地底图"}
       </span>
-      <div className="route-callout">
-        <strong>{routeTitle}</strong>
-        <span>{mapError ? `地图 SDK：${mapError}` : routeSubtitle}</span>
-      </div>
     </div>
   );
 }
@@ -609,13 +667,14 @@ function loadAmapLoader(): Promise<AMapLoaderGlobal> {
   return amapLoaderPromise;
 }
 
-function mapPoints(route: RouteResult | undefined, pois: Poi[]): MapPoint[] {
-  if (route?.points.length) return route.points;
+function mapMarkerPoints(route: RouteResult | undefined, pois: Poi[]): MapPoint[] {
   if (pois.length) return pois.map((poi) => ({ name: poi.name, lng: poi.lng, lat: poi.lat }));
+  const namedRoutePoints = route?.points.filter((point) => Boolean(point.name)) ?? [];
+  if (namedRoutePoints.length) return namedRoutePoints;
   return [
-    { name: "雷峰塔", lng: 120.148234, lat: 30.233501 },
-    { name: "苏堤春晓", lng: 120.141664, lat: 30.246586 },
-    { name: "断桥残雪", lng: 120.156228, lat: 30.258601 }
+    { name: "黄鹤楼", lng: 114.302409, lat: 30.544404 },
+    { name: "江汉关博物馆", lng: 114.292416, lat: 30.57909 },
+    { name: "汉口江滩-观江台", lng: 114.308085, lat: 30.601017 }
   ];
 }
 
@@ -626,7 +685,7 @@ function renderAmapOverlays(AMap: AMapNamespace, map: AMapInstance, points: MapP
   if (path.length > 1) {
     overlays.push(new AMap.Polyline({
       path: path.map((point) => [point.lng, point.lat]),
-      strokeColor: "#176bff",
+      strokeColor: "#7ba7c8",
       strokeOpacity: 0.86,
       strokeWeight: 6,
       lineJoin: "round",
@@ -662,15 +721,15 @@ function escapeHtml(value: string) {
 export function OrderCard({ order }: { order: { id: string; title: string; status: string; amount: number; date: string; image?: string } }) {
   return (
     <article className="card order-card">
-      <img src={order.image ?? spotImages.leifeng} alt={order.title} />
-      <div>
+      <img src={order.image ?? spotImages.yellowCraneTower} alt={order.title} />
+      <div className="order-card-main">
         <StatusTag tone={order.status === "待支付" ? "orange" : order.status === "已确认" ? "green" : "blue"}>{order.status}</StatusTag>
         <h3>{order.title}</h3>
         <p className="muted">{order.date}</p>
-        <div className="spot-head">
-          <b>￥{order.amount}</b>
-          <button className="ghost-btn">查看凭证</button>
-        </div>
+      </div>
+      <div className="order-card-action">
+        <b>￥{order.amount}</b>
+        <button className="ghost-btn">查看凭证</button>
       </div>
     </article>
   );
@@ -701,15 +760,68 @@ export function TicketOption({
   );
 }
 
-export function VoucherPreview() {
+type VoucherPreviewProps = {
+  title?: string;
+  ticketName?: string;
+  visitDate?: string;
+  slotTime?: string;
+  quantity?: number;
+  amount?: number;
+  gate?: string;
+  holderNames?: string[];
+  validUntil?: string;
+};
+
+export function VoucherPreview({
+  title = `武汉文旅演示票务 · ${DEFAULT_TICKET_POI_NAME}`,
+  ticketName = "成人票",
+  visitDate = "2026-06-06",
+  slotTime = "08:00-10:00",
+  quantity = 2,
+  amount,
+  gate = "黄鹤楼景区西门",
+  holderNames = ["张小文", "李小明"],
+  validUntil
+}: VoucherPreviewProps = {}) {
+  const slotEnd = slotTime.includes("-") ? slotTime.split("-")[1] : "";
+  const validityText = validUntil ?? (slotEnd ? `${slotEnd} 前有效` : "预约时段内有效");
+  const visitors = Array.from({ length: quantity }, (_, index) => holderNames[index] ?? `第 ${index + 1} 位游客`);
+  const details = [
+    { label: "入园日期", value: visitDate },
+    { label: "入园时段", value: slotTime },
+    { label: "票数", value: `${quantity} 张` },
+    { label: "核验入口", value: gate },
+    { label: "有效期", value: validityText },
+    ...(amount ? [{ label: "订单金额", value: `￥${amount}`, emphasis: true }] : [])
+  ];
+
   return (
     <div className="voucher">
-      <QrCode size={104} />
-      <div>
-        <StatusTag tone="green">入园凭证，仅供演示</StatusTag>
-        <h3>杭州西湖景区 · 雷峰塔 成人票</h3>
-        <p className="muted">入园日期：2026-06-06 · 入园时段：08:00-10:00 · 数量：2张</p>
-        <p className="muted">凭二维码或身份证入园，截图无效，请勿泄露给他人。</p>
+      <div className="voucher-qr">
+        <QrCode size={104} />
+        <span>动态核验码</span>
+      </div>
+      <div className="voucher-content">
+        <div className="voucher-header">
+          <StatusTag tone="green">入园凭证，仅供演示</StatusTag>
+          <h3>{title} {ticketName}</h3>
+          <p className="muted">仅用于 sandbox 流程演示，不代表真实出票、真实库存或官方支付凭证。</p>
+        </div>
+        <div className="voucher-detail-grid">
+          {details.map((item) => (
+            <div className={`voucher-detail-item ${item.emphasis ? "emphasis" : ""}`} key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="voucher-visitors" aria-label="入园人">
+          {visitors.map((visitor) => <span key={visitor}><ShieldCheck size={14} />{visitor}</span>)}
+        </div>
+        <div className="voucher-alert">
+          <CheckCircle2 size={18} />
+          <span>请在预约时段前往指定入口核验，建议提前 15 分钟到达并携带有效身份证件。</span>
+        </div>
       </div>
     </div>
   );
@@ -717,8 +829,8 @@ export function VoucherPreview() {
 
 export function RecommendReasonCard() {
   const reasons = [
-    ["浏览与收藏记录", "你最近浏览了灵隐寺、雷峰塔、西塘古镇等文化体验点。"],
-    ["实时情境信息", "当前天气适合户外活动，西湖核心区客流低于周末均值。"],
+    ["浏览与收藏记录", "你最近浏览了黄鹤楼、湖北省博物馆、江汉关博物馆等文化体验点。"],
+    ["实时情境信息", "当前天气适合户外活动，武汉核心点位客流低于周末均值。"],
     ["智能算法匹配", "综合评分、距离、热度、库存与拥堵预测后生成排序。"]
   ];
   return (
@@ -836,8 +948,8 @@ export function TrustBar() {
   return (
     <div className="trust-bar">
       {[
-        ["官方票源", "景区官方直售，放心预订", ShieldCheck],
-        ["安全支付", "多重加密，资金更安全", CheckCircle2],
+        ["演示库存", "sandbox 票务流程，不代表真实库存", ShieldCheck],
+        ["支付沙箱", "仅模拟支付链路，不产生真实扣款", CheckCircle2],
         ["随时查订单", "进度透明，行程无忧", Ticket]
       ].map(([title, desc, Icon]) => (
         <div key={title as string}>

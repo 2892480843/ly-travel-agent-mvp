@@ -5,8 +5,8 @@ import { createTicketProvider, type TicketProvider } from "./ticketProvider";
 
 const order: Order = {
   id: "order-1",
-  title: "雷峰塔 成人票 x1",
-  poiId: "ticket-leifeng-demo",
+  title: "黄鹤楼 成人票 x1",
+  poiId: "ticket-yellow-crane-tower-demo",
   ticketId: "adult",
   ticketName: "成人票",
   slotId: "08-10",
@@ -55,7 +55,7 @@ describe("provider boundaries", () => {
     const sandboxProvider = createSandboxTicketProvider();
     const provider = createTicketProvider(sandboxProvider, { TICKET_PROVIDER: "sandbox" }, fail);
 
-    expect(provider.getOptions("ticket-leifeng-demo").products[0]?.id).toBe("adult");
+    expect(provider.getOptions("ticket-yellow-crane-tower-demo").products[0]?.id).toBe("adult");
   });
 
   it("fails closed when a non-sandbox ticket provider is missing required config", () => {
@@ -65,7 +65,7 @@ describe("provider boundaries", () => {
       TICKET_API_TOKEN: "test-token"
     }, fail);
 
-    expect(() => provider.getOptions("ticket-leifeng-demo")).toThrow(/TICKET_API_SECRET/);
+    expect(() => provider.getOptions("ticket-yellow-crane-tower-demo")).toThrow(/TICKET_API_SECRET/);
   });
 });
 

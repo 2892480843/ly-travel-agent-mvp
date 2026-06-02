@@ -20,7 +20,7 @@
 |---|---|---|
 | Session secret | 已支持弱密钥识别、生成命令和生产启动 fail fast | 用 `npm run secret:generate` 生成后通过部署环境注入 `AUTH_SESSION_SECRET` |
 | 支付 provider | `sandbox` 保留本地演示；非 sandbox 缺配置会失败，未实现真实厂商 adapter 时 fail-closed | 提供支付厂商名称、API base URL、API key、webhook secret、签名算法、事件 ID 字段、支付状态映射和回调域名 |
-| 票务 provider | 雷峰塔 `sandbox` 保留本地演示；非 sandbox 缺配置会失败，未实现真实厂商 adapter 时 fail-closed | 提供票务厂商 API base URL、token、secret、票种/场次/库存字段、锁票/释放/确认/核销接口、锁票有效期和错误码映射 |
+| 票务 provider | 黄鹤楼 `sandbox` 保留本地演示；非 sandbox 缺配置会失败，未实现真实厂商 adapter 时 fail-closed；当前不代表真实官方库存、出票或支付 | 提供票务厂商 API base URL、token、secret、票种/场次/库存字段、锁票/释放/确认/核销接口、锁票有效期和错误码映射 |
 | 地图 provider | `fallback` 可本地演示，生产 readiness 会阻塞 fallback 或缺少高德 key | 配置服务端 `MAP_PROVIDER=amap`、`MAP_API_KEY` 和浏览器地图域名受限的 `VITE_AMAP_JS_KEY` |
 | 认证体系 | 当前仍是 sandbox session auth 和演示账号 | 接入生产身份源、密码/验证码/SSO 策略、账号生命周期和权限审计 |
 

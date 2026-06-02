@@ -1,4 +1,5 @@
 import type { AiResponse, Poi } from "../types";
+import { DEFAULT_CITY_ID, DEFAULT_CITY_NAME, DEFAULT_TICKET_POI_NAME, DEFAULT_TICKET_ROUTE } from "../config/city";
 import { chatWithAgent } from "./apiClient";
 import { searchPois } from "./poiService";
 
@@ -21,23 +22,28 @@ function resolvePoiTools(query: string) {
     query.includes("亲子") || query.includes("孩子") ? "亲子" : "",
     query.includes("美食") || query.includes("吃") ? "美食" : ""
   ].filter(Boolean);
-  const keyword = query.includes("雷峰塔")
-    ? "雷峰塔"
-    : query.includes("灵隐")
-      ? "灵隐"
-      : query.includes("西溪")
-        ? "西溪"
-        : query.includes("西湖")
-          ? "西湖"
-          : query.includes("美食") || query.includes("吃")
-            ? "美食"
-            : "";
-  return searchPois({ cityId: "hangzhou", keyword, tags: keyword ? [] : tags, limit: 4 });
+  if (/东湖|楚河|汉街|户部巷/.test(query)) {
+    return [];
+  }
+  const keyword = query.includes("黄鹤楼")
+    ? "黄鹤楼"
+    : query.includes("湖北省博物馆")
+      ? "湖北省博物馆"
+      : query.includes("江汉关")
+        ? "江汉关"
+        : query.includes("江滩")
+          ? "江滩"
+          : query.includes("亲子") || query.includes("孩子")
+            ? "亲子"
+            : query.includes("美食") || query.includes("吃")
+              ? "美食"
+              : "";
+  return searchPois({ cityId: DEFAULT_CITY_ID, keyword, tags: keyword ? [] : tags, limit: 4 });
 }
 
 function fallbackResponse(query: string, pois: Poi[], note: string): AiResponse {
   const wantsTicket = TICKET_INTENT_PATTERN.test(query);
-  const supportsTicketFallback = wantsTicket && /雷峰|雷峰塔/.test(query);
+  const supportsTicketFallback = wantsTicket && /黄鹤|黄鹤楼/.test(query);
   const poiNames = pois.slice(0, 3).map((poi) => poi.name);
   const text = [
     poiNames.length
@@ -46,7 +52,7 @@ function fallbackResponse(query: string, pois: Poi[], note: string): AiResponse 
     "方案2：路线、距离、天气和交通状态当前未获得后端地图/天气工具结果，不据此作实时判断；以官方地图、天气或实时接口为准。",
     wantsTicket
       ? supportsTicketFallback
-        ? "方案3：雷峰塔仅可展示浏览器本地 sandbox 票务入口，不代表真实票价、库存、锁票、核销或支付完成。"
+        ? `方案3：${DEFAULT_TICKET_POI_NAME}仅可展示浏览器本地 sandbox 票务入口，不代表真实票价、库存、锁票、核销或支付完成。`
         : "方案3：当前未接入该点位票务工具；请通过官方渠道确认票价、库存、预约、核销和支付状态。"
       : ""
   ].filter(Boolean).join("\n");
@@ -74,18 +80,18 @@ function composeResponse(
         poi.address ?? "地址待官方确认"
       ].filter(Boolean).join(" · "),
       image: poi.cover,
-      actionLabel: poi.name.includes("雷峰塔") ? "查看票务候选" : "加入行程",
-      href: poi.name.includes("雷峰塔") ? "/ticket/leifeng" : "/plan"
+      actionLabel: poi.name.includes(DEFAULT_TICKET_POI_NAME) ? "查看票务候选" : "加入行程",
+      href: poi.name.includes(DEFAULT_TICKET_POI_NAME) ? DEFAULT_TICKET_ROUTE : "/plan"
     })).concat(ticketState.supportsTicketFallback ? [{
-      id: "ticket-leifeng-fallback",
-      title: "雷峰塔票务候选",
+      id: "ticket-yellow-crane-tower-fallback",
+      title: `${DEFAULT_TICKET_POI_NAME}票务候选`,
       subtitle: "浏览器本地 sandbox 入口 · 非实时票价/库存",
       image: undefined,
       actionLabel: "去确认",
-      href: "/ticket/leifeng"
+      href: DEFAULT_TICKET_ROUTE
     }] : []),
     toolCalls: [
-      { name: "POI 搜索", status: pois.length > 0 ? "success" : "failed", summary: `命中 ${pois.length} 个杭州真实 POI 候选` },
+      { name: "POI 搜索", status: pois.length > 0 ? "success" : "failed", summary: `命中 ${pois.length} 个${DEFAULT_CITY_NAME}真实 POI 候选` },
       { name: "路线规划", status: "skipped", summary: "后端地图工具不可用，未返回距离、导航或实时交通" },
       { name: "天气查询", status: "skipped", summary: "后端天气工具不可用，未返回官方实时天气" },
       {
@@ -93,7 +99,7 @@ function composeResponse(
         status: ticketState.supportsTicketFallback ? "success" : "skipped",
         summary: ticketState.wantsTicket
           ? ticketState.supportsTicketFallback
-            ? "仅返回雷峰塔浏览器本地 sandbox 候选；非官方实时库存、价格、核销或支付结果"
+            ? `仅返回${DEFAULT_TICKET_POI_NAME}浏览器本地 sandbox 候选；非官方实时库存、价格、核销或支付结果`
             : "未命中已接入的 sandbox 票务点位；以官方渠道为准"
           : "用户未表达票务意图，未查询候选"
       }

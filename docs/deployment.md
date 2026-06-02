@@ -65,7 +65,7 @@ npm run dev
 
 ## 票务 Provider
 
-当前雷峰塔 sandbox provider 只用于本地演示。真实票务 provider 接入时必须：
+当前黄鹤楼 sandbox provider 只用于本地演示，不代表真实官方库存、出票或支付。真实票务 provider 接入时必须：
 
 - 使用 provider adapter 封装 `getOptions`、`lock`、`release`、`confirm` 和 `verify`。
 - 设置 `TICKET_API_BASE_URL`、`TICKET_API_TOKEN`、`TICKET_API_SECRET`。

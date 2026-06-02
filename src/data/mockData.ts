@@ -25,14 +25,15 @@ import {
   Clock3
 } from "lucide-react";
 import type { AppRoute, MetricItem, ScenicSpot, TimelineItem, WorkflowNode } from "../types";
+import { DEFAULT_TICKET_ROUTE } from "../config/city";
 
 export const routes: AppRoute[] = [
   { path: "/", label: "游客端首页", group: "游客端", icon: Home },
   { path: "/assistant", label: "AI旅行助手", group: "游客端", icon: Bot },
   { path: "/recommend", label: "个性化推荐", group: "游客端", icon: Sparkles },
-  { path: "/plan", label: "杭州三日游规划", group: "游客端", icon: Route },
-  { path: "/spot/lingyin", label: "灵隐寺详情", group: "游客端", icon: Compass },
-  { path: "/ticket/leifeng", label: "雷峰塔预约", group: "游客端", icon: Ticket },
+  { path: "/plan", label: "武汉三日游规划", group: "游客端", icon: Route },
+  { path: "/spot/yellow-crane-tower", label: "黄鹤楼详情", group: "游客端", icon: Compass },
+  { path: DEFAULT_TICKET_ROUTE, label: "黄鹤楼预约", group: "游客端", icon: Ticket },
   { path: "/ticket/detail", label: "票务详情", group: "游客端", icon: FileCheck2 },
   { path: "/pay", label: "订单支付", group: "游客端", icon: CreditCard },
   { path: "/me", label: "行程与订单", group: "游客端", icon: UserRound },
@@ -49,14 +50,15 @@ export const routes: AppRoute[] = [
 ];
 
 export const spotImages = {
-  westLake: "https://store.is.autonavi.com/showpic/44a8bfa45e118d5e37adf558bfcf0d82",
-  lingyin: "https://store.is.autonavi.com/showpic/4aa0a6a1b6ee72c9833441f363cbb43a",
-  leifeng: "https://store.is.autonavi.com/showpic/478ddbbf592df9e88466a3e10c5d6b70",
-  taiziwan: "https://store.is.autonavi.com/showpic/b7fdcef220d9434e6b0dfee47340ecfe",
-  xixi: "https://store.is.autonavi.com/showpic/ee8ba4fd213aa0ee5605e41415921500",
+  yellowCraneTower: "https://store.is.autonavi.com/showpic/42b23731ef5018c23ad9ff611e78747d",
+  yellowCranePark: "https://store.is.autonavi.com/showpic/22cbbe3f04476d779a154637a4de5006",
+  jianghanGuan: "https://store.is.autonavi.com/showpic/99a8ddea69655edf96b4b15961ee8241",
+  hankouRiverfront: "https://aos-comment.amap.com/B0FFHTU92U/comment/bfd55c60a272ee9fc1997ac599a461f3_2048_2048_80.jpg",
+  hubeiMuseum: "https://store.is.autonavi.com/showpic/3ff2a74321d3dc4cba39573752bfad60",
+  wuhanMuseum: "https://store.is.autonavi.com/showpic/19ba7863e5341f39260bdb9945cee524",
+  wuhanZoo: "https://store.is.autonavi.com/showpic/188b59f27a892caf0a2b082398d647bf",
   hefang: "https://store.is.autonavi.com/showpic/e7a956f2beba64afa31364a6858dac82",
-  museum: "https://aos-comment.amap.com/comment/content_service_f80d44e15d6520ed26e149c270468752_1767723337112_98447265.jpg",
-  food: "https://store.is.autonavi.com/showpic/41d656b9d4bb0eef5b94ca5faac97e87",
+  food: "https://store.is.autonavi.com/showpic/b435f423bd5669ee3efad16aa6808a94",
   hotel: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80",
   night: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
   mountain: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80",
@@ -64,7 +66,7 @@ export const spotImages = {
 };
 
 export const heroImage =
-  "https://store.is.autonavi.com/showpic/478ddbbf592df9e88466a3e10c5d6b70";
+  spotImages.yellowCraneTower;
 
 export const cityStats = [
   { label: "今日可预约产品", value: "426", hint: "景点/演出/餐饮" },
@@ -75,106 +77,103 @@ export const cityStats = [
 
 export const scenicSpots: ScenicSpot[] = [
   {
-    name: "西湖经典环线",
-    image: spotImages.westLake,
-    rating: 4.9,
+    name: "黄鹤楼",
+    image: spotImages.yellowCraneTower,
+    rating: 4.8,
     crowd: "舒适",
-    tags: ["5A景区", "亲子友好", "免费"],
-    reason: "你偏好低强度文化游，当前湖滨客流较低，适合先走断桥到苏堤。",
-    duration: "2.5小时",
-    location: "西湖区",
+    tags: ["国家级景点", "历史文化", "可预约"],
+    reason: "你偏好低强度文化游，优先安排上午入园并避开午间高峰；票务仅为 sandbox/demo。",
+    duration: "1.5-2小时",
+    location: "武昌区",
     weather: "晴 26℃",
     distance: "距你 1.2km"
   },
   {
-    name: "灵隐寺",
-    image: spotImages.lingyin,
+    name: "湖北省博物馆",
+    image: spotImages.hubeiMuseum,
     rating: 4.9,
     crowd: "较少",
-    tags: ["禅意", "文化深读", "可预约"],
-    reason: "你收藏过古寺与石刻，AI 已避开 11:00 高峰，推荐上午入园。",
-    price: "45起",
+    tags: ["博物馆", "文化深读", "亲子"],
+    reason: "你收藏过历史文化体验，室内展陈适合老人和亲子同行；开放时间以官方公告为准。",
     duration: "2小时",
-    location: "灵隐街道",
+    location: "武昌区",
     weather: "多云 25℃",
-    distance: "距你 5.3km"
+    distance: "距你 4.8km"
   },
   {
-    name: "雷峰塔",
-    image: spotImages.leifeng,
+    name: "江汉关博物馆",
+    image: spotImages.jianghanGuan,
     rating: 4.8,
     crowd: "适中",
-    tags: ["西湖十景", "夜景", "电子票"],
-    reason: "今日 16:00 后能见度好，登塔可看到南屏晚钟与湖面落日。",
-    price: "40起",
-    duration: "70分钟",
-    location: "南山路",
+    tags: ["博物馆", "江汉路", "历史建筑"],
+    reason: "适合和江汉路、汉口江滩串联，步行强度可控。",
+    duration: "1.5小时",
+    location: "江汉区",
     weather: "晴 26℃",
     distance: "距你 2.6km"
   },
   {
-    name: "太子湾公园",
-    image: spotImages.taiziwan,
+    name: "汉口江滩-观江台",
+    image: spotImages.hankouRiverfront,
     rating: 4.8,
     crowd: "舒适",
-    tags: ["自然风光", "拍照", "亲子"],
-    reason: "你选择了亲子标签，园内坡度平缓，附近有休息区和轻餐饮。",
+    tags: ["江滩", "拍照", "Citywalk"],
+    reason: "你选择了少排队标签，江滩开阔，适合晚间慢游和拍照。",
     duration: "90分钟",
-    location: "南山路",
+    location: "江岸区",
     weather: "晴 26℃",
     distance: "距你 2.1km"
   },
   {
-    name: "西溪湿地",
-    image: spotImages.xixi,
+    name: "武汉动物园",
+    image: spotImages.wuhanZoo,
     rating: 4.7,
     crowd: "较少",
-    tags: ["自然风光", "游船", "银发友好"],
-    reason: "今日湿地西区人流低于均值 18%，适合慢游与摄影。",
-    price: "80起",
+    tags: ["亲子游", "动物园", "家庭"],
+    reason: "亲子出游优先推荐，可预留休息点并缩短连续步行时间。",
     duration: "3小时",
-    location: "余杭区",
+    location: "汉阳区",
     weather: "晴 27℃",
     distance: "距你 9.4km"
   },
   {
-    name: "清河坊历史街区",
-    image: spotImages.hefang,
-    rating: 4.6,
+    name: "黄鹤楼公园",
+    image: spotImages.yellowCranePark,
+    rating: 4.7,
     crowd: "适中",
-    tags: ["宋韵文化", "美食", "夜游"],
-    reason: "你对非遗与小吃有收藏记录，晚间灯光与商户营业更完整。",
+    tags: ["风景名胜", "夜场", "武昌区"],
+    reason: "与黄鹤楼主景点同区域，可作为导览和拍照延展。",
     duration: "2小时",
-    location: "上城区",
+    location: "武昌区",
     weather: "晴 26℃",
     distance: "距你 3.8km"
   }
 ];
 
 export const foods = [
-  { name: "知味观·味庄", image: spotImages.food, tags: ["杭帮菜", "老字号"], price: 68, rating: 4.6, reason: "你偏好本地特色，距雷峰塔 1.2km，当前排队 6 分钟。" },
-  { name: "外婆家（湖滨店）", image: spotImages.food, tags: ["亲子友好", "小排队"], price: 66, rating: 4.4, reason: "适合家庭快速午餐，AI 预测 12:40 后排队下降。" },
-  { name: "猫的天空之城", image: spotImages.food, tags: ["甜品", "文创"], price: 45, rating: 4.7, reason: "适合亲子休闲和雨天备选，附近有文创打卡点。" }
+  { name: "肥肥虾庄(江汉路M+店)", image: spotImages.food, tags: ["湖北菜", "小龙虾"], price: 88, rating: 4.7, reason: "你偏好本地特色，距江汉关动线较近，当前仅展示演示排队状态。" },
+  { name: "靓靓蒸虾(沙湖旗舰店)", image: spotImages.food, tags: ["海鲜", "夜宵"], price: 96, rating: 4.7, reason: "适合晚餐或夜宵，开放时间以官方渠道为准。" },
+  { name: "金马门国际美食百汇(珞喻路店)", image: spotImages.food, tags: ["自助餐", "亲子友好"], price: 128, rating: 4.8, reason: "适合家庭快速就餐，预算较高时可作为备选。" }
 ];
 
 export const timelineDays: Record<string, TimelineItem[]> = {
   "Day 1": [
-    { time: "09:00", title: "酒店出发", subtitle: "湖滨银泰步行集结，AI 已同步天气与限行", type: "hotel", tags: ["步行10分钟"], meta: "空气优", traffic: "步行" },
-    { time: "09:30-11:00", title: "西湖游船（湖滨三公园码头）", subtitle: "泛舟湖上，远看三潭印月，避开断桥早高峰", image: spotImages.westLake, type: "spot", tags: ["必玩", "亲子友好"], meta: "90分钟", open: "08:00-17:30" },
-    { time: "11:20-12:20", title: "雷峰塔", subtitle: "登塔远眺西湖全景，了解白蛇传说", image: spotImages.leifeng, type: "spot", tags: ["历史文化", "人气热门"], meta: "余票充足", open: "08:00-18:00" },
-    { time: "12:30-13:30", title: "外婆家（湖滨店）", subtitle: "杭帮菜午餐，已预估排队 8 分钟", image: spotImages.food, type: "food", tags: ["推荐午餐", "人均110"], meta: "可取号", traffic: "步行8分钟" },
-    { time: "13:50-15:20", title: "苏堤春晓", subtitle: "慢步苏堤，拍摄湖面与柳岸", image: spotImages.taiziwan, type: "spot", tags: ["经典景点"], meta: "90分钟" },
-    { time: "15:40-17:00", title: "浙江省博物馆（武林馆区）", subtitle: "了解浙江历史与文化精华，雨天可替换", image: spotImages.museum, type: "spot", tags: ["文化体验"], meta: "需预约", open: "09:00-17:00" },
-    { time: "19:30", title: "返回酒店休息", subtitle: "自动同步明日灵隐寺预约和交通提醒", type: "traffic", tags: ["地铁优先"], meta: "12分钟" }
+    { time: "09:00", title: "酒店出发", subtitle: "司门口黄鹤楼站附近集结，AI 已同步天气与限行", type: "hotel", tags: ["步行10分钟"], meta: "空气优", traffic: "步行" },
+    { time: "09:30-11:00", title: "黄鹤楼", subtitle: "登楼远眺长江与武昌城景，上午优先避开高峰", image: spotImages.yellowCraneTower, type: "spot", tags: ["必玩", "历史文化"], meta: "90分钟", open: "08:30-18:00" },
+    { time: "11:20-12:20", title: "黄鹤楼公园", subtitle: "补充游览蛇山周边景观，按体力选择步行范围", image: spotImages.yellowCranePark, type: "spot", tags: ["风景名胜", "拍照"], meta: "60分钟", open: "08:30-18:00" },
+    { time: "12:30-13:30", title: "肥肥虾庄(江汉路M+店)", subtitle: "武汉本地风味午餐，排队状态为演示估算", image: spotImages.food, type: "food", tags: ["推荐午餐", "湖北菜"], meta: "可取号", traffic: "地铁约20分钟" },
+    { time: "13:50-15:20", title: "江汉关博物馆", subtitle: "了解汉口开埠和近代城市记忆", image: spotImages.jianghanGuan, type: "spot", tags: ["博物馆"], meta: "90分钟" },
+    { time: "15:40-17:00", title: "汉口江滩-观江台", subtitle: "江滩散步与观江拍照，避开连续室内参观疲劳", image: spotImages.hankouRiverfront, type: "spot", tags: ["Citywalk"], meta: "舒适" },
+    { time: "19:30", title: "返回酒店休息", subtitle: "自动同步明日湖北省博物馆预约提醒", type: "traffic", tags: ["地铁优先"], meta: "12分钟" }
   ],
   "Day 2": [
-    { time: "08:40-11:20", title: "灵隐寺与飞来峰", subtitle: "AI讲解石窟造像与禅宗故事", image: spotImages.lingyin, type: "spot", tags: ["文化深读", "已预约"], meta: "2.5小时", open: "07:00-18:30" },
-    { time: "12:10-13:30", title: "桂语山房", subtitle: "满觉陇茶香午餐，预算偏高提醒", image: spotImages.food, type: "food", tags: ["杭帮菜"], meta: "人均260" },
-    { time: "15:00-17:40", title: "西溪湿地", subtitle: "乘船进入湿地，避开主入口排队", image: spotImages.xixi, type: "spot", tags: ["自然风光"], meta: "舒适" }
+    { time: "08:40-11:20", title: "湖北省博物馆", subtitle: "AI讲解楚文化与馆藏重点，预约信息以官方为准", image: spotImages.hubeiMuseum, type: "spot", tags: ["文化深读", "室内"], meta: "2.5小时", open: "09:00-17:00" },
+    { time: "12:10-13:30", title: "靓靓蒸虾(沙湖旗舰店)", subtitle: "湖北特色餐饮，预算偏高提醒", image: spotImages.food, type: "food", tags: ["湖北菜"], meta: "人均120" },
+    { time: "15:00-17:40", title: "武汉博物馆", subtitle: "补充城市史脉络，作为雨天备选", image: spotImages.wuhanMuseum, type: "spot", tags: ["文化艺术"], meta: "舒适" }
   ],
   "Day 3": [
-    { time: "09:30-11:30", title: "清河坊历史街区", subtitle: "非遗小吃、南宋街巷与伴手礼", image: spotImages.hefang, type: "spot", tags: ["宋韵文化"], meta: "免费" },
-    { time: "14:00-16:20", title: "杭州亚运会博物馆", subtitle: "体育文旅专题路线收尾", image: spotImages.museum, type: "spot", tags: ["亲子", "室内"], meta: "需预约" }
+    { time: "09:30-11:30", title: "武汉动物园", subtitle: "亲子友好路线，预留休息和补给点", image: spotImages.wuhanZoo, type: "spot", tags: ["亲子"], meta: "需预约" },
+    { time: "14:00-16:20", title: "解放公园", subtitle: "公园慢游收尾，步行强度低", image: spotImages.hankouRiverfront, type: "spot", tags: ["公园自然"], meta: "免费" }
   ]
 };
 
@@ -198,17 +197,17 @@ export const trafficData = [
 ];
 
 export const channelData = [
-  { name: "访问人数", value: 129842, fill: "#1d7cf8" },
-  { name: "进入预约", value: 78635, fill: "#16c7c7" },
-  { name: "预约成功", value: 36824, fill: "#2ecb72" },
-  { name: "入园核销", value: 32165, fill: "#ff9f32" },
-  { name: "二次消费", value: 12478, fill: "#ff5d62" }
+  { name: "访问人数", value: 129842, fill: "#7ba7c8" },
+  { name: "进入预约", value: 78635, fill: "#83b8ad" },
+  { name: "预约成功", value: 36824, fill: "#6fa88a" },
+  { name: "入园核销", value: 32165, fill: "#d8b96a" },
+  { name: "二次消费", value: 12478, fill: "#c66d63" }
 ];
 
 export const orders = [
-  { id: "T20260602001", title: "雷峰塔成人票 x2", status: "待出行", amount: 110, date: "2026-06-06 08:00-10:00", image: spotImages.leifeng },
-  { id: "P20260602018", title: "西湖文化深度游三日行程", status: "已确认", amount: 2680, date: "2026-06-06 至 06-08", image: spotImages.westLake },
-  { id: "M20260602033", title: "宋韵夜游套餐", status: "待支付", amount: 398, date: "支付剩余 14:56", image: spotImages.hefang }
+  { id: "T20260602001", title: "黄鹤楼 sandbox 成人票 x2", status: "待出行", amount: 110, date: "2026-06-06 08:00-10:00", image: spotImages.yellowCraneTower },
+  { id: "P20260602018", title: "武汉文化深度游三日行程", status: "已确认", amount: 2680, date: "2026-06-06 至 06-08", image: spotImages.hubeiMuseum },
+  { id: "M20260602033", title: "江汉关夜游套餐", status: "待支付", amount: 398, date: "支付剩余 14:56", image: spotImages.jianghanGuan }
 ];
 
 export const ticketOptions = [
@@ -228,10 +227,10 @@ export const ticketSlots = [
 ] as const;
 
 export const packages = [
-  { name: "杭州西湖 + 君悦酒店 2天1晚套餐", image: spotImages.hotel, type: "门票+酒店", desc: "西湖风景区 + 杭州君悦酒店", price: 988, origin: 1286, save: 298, tags: ["适合周末", "可报销", "官方库存"] },
+  { name: "黄鹤楼 + 武昌酒店 2天1晚套餐", image: spotImages.yellowCraneTower, type: "门票+酒店", desc: "黄鹤楼 sandbox 门票候选 + 武昌酒店演示房型", price: 988, origin: 1286, save: 298, tags: ["适合周末", "可报销", "sandbox票务"] },
   { name: "成都大熊猫基地 + 川味美食套餐", image: "https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?auto=format&fit=crop&w=1200&q=80", type: "门票+餐饮", desc: "熊猫基地门票 + 特色川菜双人餐", price: 368, origin: 486, save: 118, tags: ["亲子优选", "含纪念品"] },
-  { name: "黄山风景区 + 往返接驳套餐", image: spotImages.mountain, type: "门票+接驳", desc: "黄山门票 + 杭州/黄山往返接驳", price: 658, origin: 856, save: 198, tags: ["2天1晚", "可撤销"] },
-  { name: "宋城千古情 + 夜游西湖套餐", image: spotImages.night, type: "演出+夜游", desc: "宋城演出票 + 西湖夜游船票", price: 598, origin: 796, save: 198, tags: ["夜间打卡", "沉浸体验"] }
+  { name: "湖北省博物馆 + 江滩接驳套餐", image: spotImages.hubeiMuseum, type: "导览+接驳", desc: "博物馆导览演示 + 江滩接驳", price: 658, origin: 856, save: 198, tags: ["2天1晚", "可撤销"] },
+  { name: "江汉关 + 保成路夜市套餐", image: spotImages.jianghanGuan, type: "夜游+餐饮", desc: "江汉关导览 + 夜市餐饮券演示", price: 598, origin: 796, save: 198, tags: ["夜间打卡", "沉浸体验"] }
 ];
 
 export const workflowNodes: WorkflowNode[] = [
@@ -245,34 +244,34 @@ export const workflowNodes: WorkflowNode[] = [
 ];
 
 export const merchants = [
-  ["西湖饭店（黄山风景区）", "住宿", "营业中", "已同步", "4.6", "1,248", "已通过"],
-  ["云谷索道", "交通", "营业中", "已同步", "4.8", "3,652", "已通过"],
-  ["光明顶山庄", "住宿", "营业中", "同步失败", "4.2", "856", "待审核"],
-  ["黄山景区官方旗舰店", "文创", "营业中", "已同步", "4.9", "2,158", "已通过"],
+  ["黄鹤楼文创旗舰店", "文创", "营业中", "已同步", "4.6", "1,248", "已通过"],
+  ["黄鹤楼游客中心", "交通", "营业中", "已同步", "4.8", "3,652", "已通过"],
+  ["武昌城市酒店", "住宿", "营业中", "同步失败", "4.2", "856", "待审核"],
+  ["黄鹤楼文创旗舰店", "文创", "营业中", "已同步", "4.9", "2,158", "已通过"],
   ["汤口镇游客中心餐厅", "餐饮", "暂停营业", "已同步", "4.1", "312", "已通过"],
   ["太平湖游船票务", "景区服务", "营业中", "同步失败", "4.3", "645", "驳回"]
 ];
 
 export const knowledgeRows = [
-  ["黄山景区门票多少钱？", "门票政策", "官方整理", "2026-05-24 10:15", "已发布", "8,752"],
-  ["雷峰塔开放时间是什么时候？", "景区开放", "官方整理", "2026-05-23 09:50", "已发布", "6,128"],
-  ["西湖景区如何预约门票？", "预订购票", "官方整理", "2026-05-22 16:32", "已发布", "5,642"],
-  ["灵隐寺交通运营时间多久？", "交通指南", "官方整理", "2026-05-21 14:18", "已发布", "4,315"],
+  ["黄鹤楼演示票务多少钱？", "门票政策", "演示整理", "2026-05-24 10:15", "已发布", "8,752"],
+  ["黄鹤楼开放时间是什么时候？", "景区开放", "官方整理", "2026-05-23 09:50", "已发布", "6,128"],
+  ["黄鹤楼 sandbox 票务如何预约？", "预订购票", "官方整理", "2026-05-22 16:32", "已发布", "5,642"],
+  ["湖北省博物馆交通运营时间多久？", "交通指南", "官方整理", "2026-05-21 14:18", "已发布", "4,315"],
   ["下雨天可以去哪里玩？", "游玩建议", "用户反馈", "2026-05-16 15:05", "待更新", "1,652"]
 ];
 
 export const campaignRows = [
-  ["晚美乡村周末游", "本地游/山野季", "进行中", "128,764", "36,215", "4.82%"],
+  ["江滩夜游周末线", "本地游/夜游季", "进行中", "128,764", "36,215", "4.82%"],
   ["端午民俗文化节", "节庆/热门", "待上线", "-", "-", "-"],
   ["亲子研学季", "亲子/研学", "待上线", "-", "-", "-"],
-  ["黄山云海观景季", "主题/摄影", "已结束", "96,532", "27,184", "3.61%"],
-  ["不夜黄山·夜游计划", "夜游/演出", "已结束", "152,893", "42,901", "5.12%"]
+  ["黄鹤楼观江打卡季", "主题/摄影", "已结束", "96,532", "27,184", "3.61%"],
+  ["江汉关·夜游计划", "夜游/演出", "已结束", "152,893", "42,901", "5.12%"]
 ];
 
 export const reviewRows = [
-  ["西湖饭店（黄山风景区）", "李小雨", "商户入驻", "证照模糊", "待审核", "2026-05-29 09:21"],
-  ["云谷索道夜展产品", "王思语", "内容发布", "无风险", "待审核", "2026-05-25 08:44"],
+  ["黄鹤楼文创旗舰店", "李小雨", "商户入驻", "证照模糊", "待审核", "2026-05-29 09:21"],
+  ["黄鹤楼夜游演示产品", "王思语", "内容发布", "无风险", "待审核", "2026-05-25 08:44"],
   ["夜游蜀山光影秀", "陈梦", "活动发布", "敏感词疑似", "待审核", "2026-05-24 22:17"],
   ["太平烟车体验攻略", "周子恒", "内容发布", "无风险", "审核中", "2026-05-24 20:03"],
-  ["西湖地轩酒店", "孙悦", "商户入驻", "地址异常", "已驳回", "2026-05-24 14:05"]
+  ["江汉关城市礼物店", "孙悦", "商户入驻", "地址异常", "已驳回", "2026-05-24 14:05"]
 ];

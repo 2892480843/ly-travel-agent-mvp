@@ -1,5 +1,6 @@
 import { realCities, realPoiPreview } from "../data/realPoiPreview";
 import type { City, Poi, PoiSearchParams, ScenicSpot, StatusTone } from "../types";
+import { DEFAULT_CITY_ID, DEFAULT_CITY_NAME } from "../config/city";
 
 const fallbackImage = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80";
 
@@ -27,7 +28,7 @@ export function getPoiById(id: string, source: Poi[] = realPoiPreview): Poi | un
   return source.find((poi) => poi.id === id);
 }
 
-export function getFeaturedPois(cityId = "hangzhou", limit = 8): Poi[] {
+export function getFeaturedPois(cityId = DEFAULT_CITY_ID, limit = 8): Poi[] {
   return searchPois({ cityId, limit });
 }
 
@@ -42,7 +43,7 @@ export function getPoiCategories(source: Poi[] = realPoiPreview) {
 export function poiToScenicSpot(poi: Poi): ScenicSpot {
   const crowdOptions: Array<ScenicSpot["crowd"]> = ["舒适", "较少", "适中"];
   const crowd = crowdOptions[Math.abs(hashText(poi.id)) % crowdOptions.length];
-  const area = poi.tags.find((tag) => tag.endsWith("区")) ?? poi.address?.slice(0, 8) ?? "杭州";
+  const area = poi.tags.find((tag) => tag.endsWith("区")) ?? poi.address?.slice(0, 8) ?? DEFAULT_CITY_NAME;
   return {
     name: poi.name,
     image: poi.cover ?? poi.images?.[0] ?? fallbackImage,

@@ -24,7 +24,8 @@ const login = await request("/api/auth/login", {
   method: "POST",
   body: JSON.stringify({ role: "visitor", password: "sandbox" })
 });
-const options = await request("/api/tickets/options?poiId=ticket-leifeng-demo&visitDate=2026-06-06");
+const demoTicketPoiId = "ticket-yellow-crane-tower-demo";
+const options = await request(`/api/tickets/options?poiId=${demoTicketPoiId}&visitDate=2026-06-06`);
 const product = options.products[0];
 const slot = options.slots[0];
 const lock = await request("/api/tickets/lock", {
@@ -34,8 +35,8 @@ const lock = await request("/api/tickets/lock", {
 const order = await request("/api/orders", {
   method: "POST",
   body: JSON.stringify({
-    title: `雷峰塔 ${product.name} x1`,
-    poiId: "ticket-leifeng-demo",
+    title: `黄鹤楼 ${product.name} x1`,
+    poiId: demoTicketPoiId,
     ticketId: product.id,
     ticketName: product.name,
     slotId: slot.id,

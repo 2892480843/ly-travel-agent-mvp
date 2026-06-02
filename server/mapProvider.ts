@@ -1,4 +1,5 @@
 import type { City, MapPoint, Poi, PoiCategory, RouteMode, RouteResult } from "../src/types";
+import { DEFAULT_CITY_ADCODE, DEFAULT_CITY_ID, DEFAULT_CITY_NAME, DEFAULT_CITY_OFFICIAL_NAME } from "./config/city";
 
 export type MapProviderMeta = {
   provider: string;
@@ -291,7 +292,7 @@ export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config:
         fallback: false,
         address: regeo?.formatted_address,
         adcode: regeo?.addressComponent?.adcode,
-        poi: firstPoi ? mapAmapPoi(firstPoi, input.cityId ?? "hangzhou") : undefined,
+        poi: firstPoi ? mapAmapPoi(firstPoi, input.cityId ?? DEFAULT_CITY_ID) : undefined,
         distanceMeters: firstPoi ? Math.round(toNumber(firstPoi.distance) ?? 0) : undefined
       };
     } catch (error) {
@@ -375,7 +376,7 @@ export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config:
   function localPoiSearch(input: Required<Pick<PoiSearchInput, "limit">> & PoiSearchInput, failureReason: string): PoiSearchResult {
     const keyword = input.keyword ? normalize(input.keyword) : "";
     const tags = input.tags?.map(normalize) ?? [];
-    const cityId = input.cityId ?? "hangzhou";
+    const cityId = input.cityId ?? DEFAULT_CITY_ID;
     const candidates = data.pois
       .filter((poi) => {
         const text = normalize([poi.name, poi.address, poi.category, poi.description, ...poi.tags].filter(Boolean).join(" "));
@@ -416,7 +417,7 @@ export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config:
     };
   }
 
-  function localGeocode(keyword: string, cityId = "hangzhou", failureReason: string): GeocodeResult {
+  function localGeocode(keyword: string, cityId = DEFAULT_CITY_ID, failureReason: string): GeocodeResult {
     const clean = normalize(keyword);
     const poi = data.pois.find((item) => item.cityId === cityId && normalize([item.name, item.address, item.category].filter(Boolean).join(" ")).includes(clean));
     return {
@@ -488,7 +489,7 @@ function normalizeSearchInput(input: PoiSearchInput): Required<Pick<PoiSearchInp
 }
 
 function normalizeRouteInput(input: RouteRequest, pois: Poi[]): Required<Pick<RouteRequest, "origin" | "destination" | "mode">> & RouteRequest {
-  const basePois = pois.filter((poi) => poi.cityId === (input.cityId ?? "hangzhou") && poi.category === "景点").slice(0, 5);
+  const basePois = pois.filter((poi) => poi.cityId === (input.cityId ?? DEFAULT_CITY_ID) && poi.category === "景点").slice(0, 5);
   const origin = input.origin ?? pointFromPoi(basePois[0]);
   const destination = input.destination ?? pointFromPoi(basePois[3] ?? basePois[0]);
   return {
@@ -506,11 +507,11 @@ function routeEndpoint(mode: RouteMode) {
   return "/v5/direction/walking";
 }
 
-function resolveCity(cities: City[], cityId = "hangzhou") {
+function resolveCity(cities: City[], cityId = DEFAULT_CITY_ID) {
   return cities.find((city) => city.id === cityId || city.adcode === cityId || city.name === cityId || city.officialName === cityId)
-    ?? cities.find((city) => city.id === "hangzhou")
+    ?? cities.find((city) => city.id === DEFAULT_CITY_ID)
     ?? cities[0]
-    ?? { id: "hangzhou", name: "杭州", officialName: "杭州市", pinyin: "hangzhou", adcode: "330100", level: "city" };
+    ?? { id: DEFAULT_CITY_ID, name: DEFAULT_CITY_NAME, officialName: DEFAULT_CITY_OFFICIAL_NAME, pinyin: DEFAULT_CITY_ID, adcode: DEFAULT_CITY_ADCODE, level: "city" };
 }
 
 function mapAmapPoi(poi: AmapPoi, cityId: string): NearbyPoi | undefined {

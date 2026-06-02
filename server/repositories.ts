@@ -149,7 +149,7 @@ export function getAdminMetrics(): AdminMetrics {
       { label: "地图服务", value: process.env.MAP_PROVIDER || "fallback", delta: "provider adapter", tone: "cyan" }
     ],
     alerts: [
-      { title: "库存预警", desc: "雷峰塔部分时段库存低于阈值，锁票失败会明确返回库存不足。", level: "中" },
+      { title: "库存预警", desc: "黄鹤楼 sandbox 候选时段库存低于阈值，锁票失败会明确返回库存不足。", level: "中" },
       { title: "支付沙箱", desc: "未配置真实支付密钥时，支付通过 sandbox provider 模拟。", level: "低" },
       { title: "地图降级", desc: "未配置地图 key 时返回 fallback 路线和原因。", level: "低" }
     ],

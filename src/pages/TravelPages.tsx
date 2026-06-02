@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Accessibility,
   Baby,
   Bell,
-  CalendarDays,
   Camera,
-  Car,
   CheckCircle2,
   Clock3,
   CreditCard,
-  FileText,
   Headphones,
-  Hotel,
   Languages,
+  Landmark,
   MapPin,
   Mic,
   Navigation,
   PackageCheck,
+  ParkingCircle,
   Plus,
   QrCode,
   RefreshCcw,
@@ -26,9 +25,9 @@ import {
   Sparkles,
   Star,
   Ticket,
+  Toilet,
   Train,
   Utensils,
-  Video,
   WalletCards
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -59,35 +58,183 @@ import {
   ticketSlots,
   timelineDays
 } from "../data/mockData";
-import type { Order, PaymentRecord, Poi, RouteResult, StatusTone, TicketLock, TicketProduct, TicketSlot } from "../types";
+import type { Order, PaymentRecord, Poi, RouteResult, TicketLock, TicketProduct, TicketSlot } from "../types";
 import { createOrder, createPayment, fetchOrders, fetchPayment, fetchPoi, fetchPois, fetchRoute, fetchTicketOptions, lockTickets, simulateSandboxPayment } from "../services/apiClient";
 import { getLatestOrder, orderStatusLabel, readOrders, saveOrder, updateOrderStatus } from "../services/orderService";
 import { poiToScenicSpot, statusForStock } from "../services/poiService";
 import { validateTicketSelection } from "../services/ticketService";
+import { BRAND_HERO_EYEBROW, BRAND_NAME } from "../config/brand";
+import {
+  DEFAULT_CITY_ID,
+  DEFAULT_CITY_NAME,
+  DEFAULT_CITY_OFFICIAL_NAME,
+  DEFAULT_TICKET_DEMO_POI_ID,
+  DEFAULT_TICKET_POI_NAME,
+  DEFAULT_TICKET_REAL_POI_ID,
+  DEFAULT_TICKET_ROUTE
+} from "../config/city";
 
 const featureShortcuts = [
   ["智能导览", "景点导览 · 语音讲解", Navigation, "/map"],
   ["生成行程", "AI定制 · 专属路线", Sparkles, "/plan"],
   ["多语翻译", "入境游客服务", Languages, "/assistant"],
-  ["票务预约", "门票 · 演出 · 套餐", Ticket, "/ticket/leifeng"]
+  ["票务预约", "门票 · 演出 · 套餐", Ticket, DEFAULT_TICKET_ROUTE]
 ] as const;
 
 const serviceItems = ["卫生间", "停车场", "母婴室", "无障碍", "充电宝", "游客中心", "行李寄存", "直通车"];
+
+const mapLayerItems = [
+  { label: "景点", icon: Landmark, tone: "green" },
+  { label: "卫生间", icon: Toilet, tone: "blue" },
+  { label: "母婴室", icon: Baby, tone: "purple" },
+  { label: "停车场", icon: ParkingCircle, tone: "cyan" },
+  { label: "无障碍设施", icon: Accessibility, tone: "orange" },
+  { label: "餐饮", icon: Utensils, tone: "gold" }
+] as const;
+
+type MapLayerLabel = (typeof mapLayerItems)[number]["label"];
+
+const ticketUseSteps = [
+  {
+    title: "提交订单",
+    desc: "确认票种、日期、时段与数量，系统会先为你锁定库存。",
+    note: "请在倒计时内完成支付",
+    icon: ShoppingBag
+  },
+  {
+    title: "获取凭证",
+    desc: "支付成功后生成电子二维码，并同步到订单详情与我的行程。",
+    note: "支持二维码或身份证核验",
+    icon: PackageCheck
+  },
+  {
+    title: "扫码入园",
+    desc: "按预约时段到达景区入口，出示凭证即可核销入园。",
+    note: "建议提前 15 分钟到达",
+    icon: QrCode
+  },
+  {
+    title: "快乐游玩",
+    desc: "入园后可继续使用导览、讲解、路线与周边推荐服务。",
+    note: "退改规则可在订单详情查看",
+    icon: Sparkles
+  }
+] as const;
+
+const ticketHeroFacts = [
+  { label: "游客评分", value: "4.8", desc: "12,856 条评价", icon: Star },
+  { label: "开放时间", value: "08:00-17:30", desc: "建议提前 15 分钟到达", icon: Clock3 },
+  { label: "演示票价", value: "￥40 起", desc: "sandbox 库存，不代表真实出票", icon: Ticket }
+] as const;
+
+type OpeningPeriodSummary = {
+  label: string;
+  time: string;
+  meta: string;
+};
+
+function summarizeOpeningHours(openingHours?: string): { periods: OpeningPeriodSummary[]; notice: string } {
+  const source = openingHours?.replace(/\s+/g, " ").trim();
+
+  if (!source) {
+    return {
+      periods: [{ label: "开放信息", time: "以官方公告为准", meta: "建议出发前再次确认" }],
+      notice: "开放、售票与入园时间以景区官方公告为准。"
+    };
+  }
+
+  const readPeriod = (label: "日场" | "夜场") => {
+    const time = source.match(new RegExp(`${label}[^；;。]*?(\\d{1,2}:\\d{2})\\s*[-–—至到]\\s*(\\d{1,2}:\\d{2})`));
+    if (!time) return undefined;
+
+    const sale = source.match(new RegExp(`${label}[^；;。]*?最晚售票\\s*(\\d{1,2}:\\d{2})`));
+    const entry = source.match(new RegExp(`${label}[^；;。]*?最晚(?:进入|入园)\\s*(\\d{1,2}:\\d{2})`));
+    const meta = [
+      sale ? `售票至 ${sale[1]}` : undefined,
+      entry ? `入园至 ${entry[1]}` : undefined
+    ].filter(Boolean).join(" / ");
+
+    return {
+      label,
+      time: `${time[1]}-${time[2]}`,
+      meta: meta || "以现场公告为准"
+    };
+  };
+
+  const periods = [readPeriod("日场"), readPeriod("夜场")].filter(Boolean) as OpeningPeriodSummary[];
+
+  if (!periods.length) {
+    const chunks = source.split(/[；;]/).map((item) => item.trim()).filter(Boolean).slice(0, 2);
+    return {
+      periods: chunks.length ? chunks.map((chunk, index) => ({
+        label: index === 0 ? "开放" : "补充",
+        time: chunk.match(/\d{1,2}:\d{2}\s*[-–—至到,，]\s*\d{1,2}:\d{2}/)?.[0] ?? chunk.slice(0, 18),
+        meta: "出发前再次确认"
+      })) : [{ label: "开放信息", time: source.slice(0, 18), meta: "出发前再次确认" }],
+      notice: "具体开放日期、节假日安排和入园规则以官方公告为准。"
+    };
+  }
+
+  return {
+    periods,
+    notice: source.includes("门票不互通")
+      ? "日场与夜场门票不互通，请按入园时段购买对应票种。"
+      : "开放、售票与入园时间以景区官方公告为准。"
+  };
+}
+
+function splitSuitableGroups(suitableFor?: string) {
+  return (suitableFor ?? "历史文化爱好者 / 城市地标打卡 / 亲子家庭 / 摄影爱好者")
+    .split(/[\/、，,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+const tripTimelineItems = [
+  { date: "06-06", time: "09:00", place: "武汉站", desc: "高铁到达，行李寄存已提醒", status: "已出票", tone: "green" },
+  { date: "06-06", time: "10:15", place: "黄鹤楼", desc: "sandbox 票务演示预约", status: "已预约", tone: "gold" },
+  { date: "06-06", time: "15:30", place: "江汉关博物馆", desc: "与江汉路 Citywalk 串联", status: "已加入", tone: "blue" },
+  { date: "06-08", time: "15:20", place: "汉口站", desc: "返程车票与提醒已同步", status: "已出票", tone: "green" }
+] as const;
 
 export function HomePage() {
   return (
     <>
       <section className="hero home-hero" style={{ "--hero-image": `url(${heroImage})` } as React.CSSProperties}>
-        <div className="hero-content hero-left home-hero-content">
-          <span className="hero-eyebrow">Hangzhou Culture Travel AI Platform</span>
-          <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
-            智游城市 乐享文旅体
-          </motion.h1>
-          <p>面向游客、景区运营方与商户的文旅智能体，从搜、问、订、游到评和复购，打通可执行的城市文旅服务链路。</p>
-          <div className="search-pill">
-            <Sparkles color="var(--blue)" />
-            <input placeholder="问问今天怎么玩、怎么走、订什么..." />
-            <Link className="icon-btn" to="/assistant"><Navigation size={19} /></Link>
+        <div className="home-hero-grid">
+          <div className="hero-content hero-left home-hero-content">
+            <span className="hero-eyebrow">{BRAND_HERO_EYEBROW}</span>
+            <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
+              {BRAND_NAME}
+            </motion.h1>
+            <p className="hero-lead">{DEFAULT_CITY_NAME}城市级智慧文旅服务平台，把 AI 咨询、票务演示、智能导览、行程规划与运营调度连成一条可信赖的服务链路。</p>
+            <div className="home-command">
+              <div className="search-pill">
+                <Sparkles color="var(--green)" />
+                <input aria-label="AI 文旅问答入口" placeholder="问问今天怎么玩、怎么走、订什么..." />
+                <Link className="icon-btn" to="/assistant" aria-label="进入 AI 旅行助手"><Navigation size={19} /></Link>
+              </div>
+              <div className="home-trust-row">
+                {["sandbox票务", "实时客流", "多语服务", "运营联动"].map((item) => <span key={item}>{item}</span>)}
+              </div>
+            </div>
+          </div>
+          <div className="home-action-board" aria-label="核心功能入口">
+            <div className="home-action-board-head">
+              <span>Core Services</span>
+              <strong>一站式文旅服务</strong>
+            </div>
+            {featureShortcuts.map(([title, desc, Icon, path], index) => (
+              <Link className="home-action" key={title} to={path}>
+                <span className="home-action-index">{String(index + 1).padStart(2, "0")}</span>
+                <span className="home-action-icon"><Icon size={21} /></span>
+                <span className="home-action-copy">
+                  <strong>{title}</strong>
+                  <small>{desc}</small>
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
         <div className="hero-kpis">
@@ -101,15 +248,6 @@ export function HomePage() {
         </div>
       </section>
       <div className="container home-stack grid" style={{ gap: 18 }}>
-        <div className="shortcut-grid grid grid-4">
-          {featureShortcuts.map(([title, desc, Icon, path]) => (
-            <Link className="shortcut-card" key={title} to={path}>
-              <Icon color="var(--blue)" size={30} />
-              <h3>{title}</h3>
-              <p className="muted">{desc}</p>
-            </Link>
-          ))}
-        </div>
         <div className="split">
           <Section title="今日推荐" subtitle="结合天气、客流、库存与偏好重排" className="feature-section" action={<Link className="subtle-link" to="/recommend">查看更多</Link>}>
             <div className="grid grid-2">
@@ -128,12 +266,12 @@ export function HomePage() {
             </div>
           </Section>
         </div>
-        <div className="grid grid-3">
+        <div className="grid grid-3 home-service-grid">
           <Section title="热门路线" subtitle="路线含距离、交通和拥堵提示">
             {[
-              ["西湖经典一日游", "约 8.2 公里，步行+游船", "人少舒适"],
-              ["宋韵文化体验线", "清河坊 + 南宋御街 + 夜游", "夜景推荐"],
-              ["运河夜游路线", "公交 + 步行 + 游船", "舒适"]
+              ["黄鹤楼经典一日游", "约 7.8 公里，步行+地铁", "人少舒适"],
+              ["江汉关近代城市线", "江汉关 + 江滩 + 夜市", "夜景推荐"],
+              ["博物馆亲子路线", "湖北省博物馆 + 武汉博物馆", "舒适"]
             ].map(([line, desc, tag]) => (
               <div className="reason-row" key={line}>
                 <span><Navigation size={15} /></span>
@@ -147,9 +285,9 @@ export function HomePage() {
             </div>
           </Section>
           <Section title="演出/赛事联动" subtitle="票务后自动推荐餐饮酒店">
-            {["《宋城千古情》今晚19:30", "杭州大运河音乐节", "浙江绿城主场赛事"].map((item) => (
+            {["黄鹤楼夜间导览演示", "武汉江滩音乐活动", "武汉主场赛事联动"].map((item) => (
               <div className="spot-card compact" key={item}>
-                <img src={spotImages.hefang} alt={item} />
+                <img src={spotImages.jianghanGuan} alt={item} />
                 <div><strong>{item}</strong><p className="muted">含夜游、接驳与餐饮券</p><Link className="primary-btn" to="/packages">查看套餐</Link></div>
               </div>
             ))}
@@ -169,7 +307,7 @@ export function AssistantPage() {
       </div>
       <aside className="grid assist-rail">
         <Section title="AI旅行助手" subtitle="多模态问答" className="rail-section">
-          <div className="grid">
+          <div className="assistant-mode-grid">
             {[
               ["文本提问", Sparkles],
               ["语音问答", Mic],
@@ -185,7 +323,7 @@ export function AssistantPage() {
           </div>
         </Section>
         <Section title="我的行程" className="rail-section">
-          <strong>西湖文化深度游</strong>
+          <strong>武汉文化深度游</strong>
           <p className="muted">3 个景点、2 个活动，已保存至 2026-06-06</p>
           <Link className="ghost-btn" to="/me">查看行程</Link>
         </Section>
@@ -195,17 +333,19 @@ export function AssistantPage() {
       </main>
       <aside className="grid assist-rail">
         <Section title="热门问题" className="rail-section" action={<button className="ghost-btn">换一换</button>}>
-          {["西湖一日游最佳路线推荐", "杭州必吃的十大美食", "雷峰塔门票多少钱？需要预约吗？", "灵隐寺怎么去？"].map((q) => <p key={q}>🔥 {q}</p>)}
+          {["武汉一日游最佳路线推荐", "武汉必吃的本地美食", "黄鹤楼门票演示怎么走？", "江汉关博物馆怎么去？"].map((q) => <p key={q}>🔥 {q}</p>)}
         </Section>
         <Section title="快捷操作" className="rail-section">
-          <div className="grid grid-2">
+          <div className="assistant-action-grid">
             {["行程规划", "景点导览", "票务预约", "酒店预订", "交通出行", "美食推荐"].map((item) => <button className="ghost-btn" key={item}>{item}</button>)}
           </div>
         </Section>
         <Section title="工具调用状态" className="rail-section">
-          {["POI知识库已命中", "票务库存接口正常", "地图拥堵数据已同步"].map((item, i) => (
-            <p key={item}><StatusTag tone={i === 1 ? "green" : "blue"}>{i === 1 ? "在线" : "完成"}</StatusTag> {item}</p>
-          ))}
+          <div className="assistant-status-list">
+            {["POI知识库已命中", "票务库存接口正常", "地图拥堵数据已同步"].map((item, i) => (
+              <p key={item}><StatusTag tone={i === 1 ? "green" : "blue"}>{i === 1 ? "在线" : "完成"}</StatusTag> {item}</p>
+            ))}
+          </div>
         </Section>
       </aside>
     </div>
@@ -223,7 +363,7 @@ export function RecommendPage() {
     let alive = true;
     setLoading(true);
     fetchPois({
-      cityId: "hangzhou",
+      cityId: DEFAULT_CITY_ID,
       category,
       tags: filter === "适合带娃" ? ["亲子"] : filter === "少排队" ? ["景点"] : filter === "夜游" ? ["夜生活"] : undefined,
       limit: 10
@@ -246,12 +386,12 @@ export function RecommendPage() {
 
   const filtered = pois.length ? pois.map(poiToScenicSpot) : filter === "美食" ? foods : scenicSpots;
   return (
-    <div className="container split">
+    <div className="container split recommend-layout">
       <main className="grid">
         <div className="dashboard-title">
           <div>
             <h1>个性化推荐</h1>
-            <p className="muted">基于你的偏好与实时情境，为你筛选最合适的杭州文旅体验</p>
+            <p className="muted">基于你的偏好与实时情境，为你筛选最合适的{DEFAULT_CITY_NAME}文旅体验</p>
           </div>
           <div className="filters">
             {["全部推荐", "适合带娃", "少排队", "夜游", "Citywalk", "美食"].map((item) => (
@@ -259,9 +399,9 @@ export function RecommendPage() {
             ))}
           </div>
         </div>
-        <Section title={`为你找到 ${loading ? "..." : filtered.length} 个推荐`} action={<StatusTag tone="blue">{pois.length ? "真实 POI + 演示情境" : "fallback/demo"}</StatusTag>}>
+        <Section title={`为你找到 ${loading ? "..." : filtered.length} 个推荐`} className="recommend-results-section" action={<StatusTag tone="blue">{pois.length ? "真实 POI + 演示情境" : "fallback/demo"}</StatusTag>}>
           {error ? <p className="muted">{error}</p> : null}
-          <div className="grid grid-2">
+          <div className="recommend-results-grid">
             {filtered.map((item) => "crowd" in item ? <SpotCard key={item.name} spot={item} /> : (
               <article className="card spot-card" key={item.name}>
                 <img src={item.image} alt={item.name} />
@@ -283,20 +423,85 @@ export function RecommendPage() {
           </div>
         </Section>
       </main>
-      <aside className="grid">
-        <Section title="我的偏好">
-          <div className="profile-card">
-            <span className="avatar" />
-            <h2>张小雨</h2>
-            <StatusTag tone="gold">Lv.5 资深旅行家</StatusTag>
-            <div className="filters">{["文化体验", "历史古迹", "美食爱好者", "亲子出游"].map((tag) => <StatusTag key={tag}>{tag}</StatusTag>)}</div>
-            <button className="ghost-btn">编辑偏好</button>
+      <aside className="grid recommend-aside">
+        <Section title="我的偏好" className="preference-panel">
+          <div className="preference-card">
+            <div className="preference-identity">
+              <span className="preference-avatar">雨</span>
+              <div>
+                <span className="preference-kicker">旅行画像</span>
+                <h2>张小雨</h2>
+                <StatusTag tone="gold">Lv.5 资深旅行家</StatusTag>
+              </div>
+            </div>
+            <div className="preference-metrics" aria-label="偏好概览">
+              {[
+                ["92%", "偏好匹配"],
+                ["4", "核心标签"],
+                ["低", "排队偏好"]
+              ].map(([value, label]) => (
+                <div key={label}>
+                  <strong>{value}</strong>
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="preference-tags">
+              {["文化体验", "历史古迹", "美食爱好者", "亲子出游"].map((tag) => <span key={tag}>{tag}</span>)}
+            </div>
+            <button className="ghost-btn"><Sparkles size={16} />编辑偏好</button>
           </div>
         </Section>
-        <Section title="当前位置与天气">
-          <h2>杭州 · 西湖区</h2>
-          <p><StatusTag tone="orange">26℃ 晴</StatusTag> <StatusTag tone="green">空气优 AQI 32</StatusTag></p>
-          <p className="muted">湿度 62%，东南风 2级，适合户外步行。</p>
+        <Section title="当前位置与天气" className="weather-panel">
+          <div className="weather-hero">
+            <div>
+              <span className="weather-location"><MapPin size={15} />当前位置</span>
+              <h2>{DEFAULT_CITY_NAME} · 武昌区</h2>
+              <p className="muted">蛇山-黄鹤楼片区 · 更新于 05:20</p>
+            </div>
+            <div className="weather-temp">
+              <strong>26°</strong>
+              <span>晴</span>
+            </div>
+          </div>
+          <div className="filters tiny-gap">
+            <StatusTag tone="orange">体感 28℃</StatusTag>
+            <StatusTag tone="green">空气优 AQI 32</StatusTag>
+            <StatusTag tone="blue">适合户外步行</StatusTag>
+          </div>
+          <div className="weather-metric-grid">
+            {[
+              ["湿度", "62%", "体感略闷"],
+              ["东南风", "2级", "江边微风"],
+              ["降水概率", "12%", "无需雨具"],
+              ["紫外线", "中等", "建议防晒"],
+              ["能见度", "12 km", "适合远眺"],
+              ["舒适度", "82/100", "步行友好"]
+            ].map(([label, value, hint]) => (
+              <div className="weather-metric" key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+                <small>{hint}</small>
+              </div>
+            ))}
+          </div>
+          <div className="weather-route-advice">
+            {[
+              ["上午", "登楼观江", "光线清晰，客流相对平稳"],
+              ["午后", "博物馆/室内", "避开日晒与热门点高峰"],
+              ["傍晚", "江滩漫步", "风力舒适，适合拍照"]
+            ].map(([time, title, desc]) => (
+              <div key={time}>
+                <span>{time}</span>
+                <strong>{title}</strong>
+                <small>{desc}</small>
+              </div>
+            ))}
+          </div>
+          <div className="weather-alert">
+            <ShieldCheck size={16} />
+            <p><strong>AI 建议：</strong>今日优先安排黄鹤楼、蛇山步道与江滩线；儿童和老人建议每 45 分钟安排一次休息点。</p>
+          </div>
         </Section>
         <RecommendReasonCard />
       </aside>
@@ -310,7 +515,7 @@ export function PlanPage() {
   return (
     <div className="container wide-split plan-layout">
       <div style={{ gridColumn: "1 / -1" }}>
-        <PageHeader title="杭州三日游智能规划" subtitle="结合天气、营业时间、交通时长、票务库存与同行偏好生成可执行行程" />
+        <PageHeader title={`${DEFAULT_CITY_NAME}三日游智能规划`} subtitle="结合天气、营业时间、交通时长、票务演示库存与同行偏好生成可执行行程" />
       </div>
       <aside className="card card-pad planner-panel">
         <div className="section-title"><h2>行程设置</h2><button className="subtle-link">清空</button></div>
@@ -328,10 +533,13 @@ export function PlanPage() {
       </aside>
       <main className="grid">
         <Section
-          title="杭州 3日2晚 文化深度游"
+          title={`${DEFAULT_CITY_NAME} 3日2晚 文化深度游`}
           subtitle="行程由 AI 生成，可拖拽调整顺序，点击景点可换成同类型候选"
           action={<div className="filters"><button className="ghost-btn">调整偏好</button><button className="ghost-btn"><RefreshCcw size={16} />重新生成</button></div>}
         >
+          <div className="planner-summary-strip">
+            {["可步行比例 64%", "热门点错峰 3 处", "亲子休息点 5 个", "票务可预约 4 项"].map((item) => <span key={item}>{item}</span>)}
+          </div>
           <div className="filters" style={{ marginBottom: 14 }}>
             {Object.keys(timelineDays).map((d) => <button key={d} onClick={() => setDay(d)} className={day === d ? "primary-btn" : "ghost-btn"}>{d}</button>)}
             <StatusTag tone="green">20-28℃ 空气优</StatusTag>
@@ -340,15 +548,15 @@ export function PlanPage() {
         </Section>
       </main>
       <aside className="grid">
-        <Section title="推荐理由">
-          {["西湖、灵隐、运河三大核心体验一次玩到", "自然风光 + 人文历史 + 文化体验，节奏舒适", "错峰安排热门景点，优化游览顺序", "亲子友好，保留休息与室内替代点"].map((r) => <p key={r}><CheckCircle2 color="var(--green)" size={16} /> {r}</p>)}
+        <Section title="推荐理由" className="decision-panel">
+          {["黄鹤楼、江汉关、湖北省博物馆三类核心体验一次玩到", "江城风光 + 人文历史 + 美食体验，节奏舒适", "错峰安排热门景点，优化游览顺序", "亲子友好，保留休息与室内替代点"].map((r) => <p key={r}><CheckCircle2 color="var(--green)" size={16} /> {r}</p>)}
         </Section>
-        <Section title="约束条件已满足">
+        <Section title="约束条件已满足" className="decision-panel">
           {["出行天数：3天", "预算：￥2000 - ￥3000", "同行：2成人1儿童", "语言：中文（简体）"].map((item) => <p key={item}><StatusTag tone="green">通过</StatusTag> {item}</p>)}
         </Section>
-        <Section title="预计费用（人均）">
-          <h2 style={{ color: "var(--blue)", margin: 0 }}>￥2,680 <small>/3天</small></h2>
-          <Donut data={[{ name: "住宿", value: 47, fill: "#176bff" }, { name: "门票", value: 28, fill: "#16c7c7" }, { name: "餐饮", value: 16, fill: "#ff9f32" }, { name: "交通", value: 9, fill: "#7c5cff" }]} />
+        <Section title="预计费用（人均）" className="budget-panel">
+          <h2 style={{ color: "var(--green)", margin: 0 }}>￥2,680 <small>/3天</small></h2>
+          <Donut data={[{ name: "住宿", value: 47, fill: "#6fa88a" }, { name: "门票", value: 28, fill: "#d8b96a" }, { name: "餐饮", value: 16, fill: "#c9975d" }, { name: "交通", value: 9, fill: "#7ba7c8" }]} />
           <Link className="primary-btn" to="/packages" style={{ width: "100%" }}>一键预订景点门票 + 酒店 + 交通</Link>
         </Section>
       </aside>
@@ -363,52 +571,119 @@ export function SpotDetailPage() {
   const [nearby, setNearby] = useState<Poi[]>([]);
 
   useEffect(() => {
-    fetchPoi("hangzhou-b023b02842").then(setPoi);
-    fetchPois({ cityId: "hangzhou", category: "景点", limit: 5 }).then(setNearby);
+    fetchPoi(DEFAULT_TICKET_REAL_POI_ID).then(setPoi);
+    fetchPois({ cityId: DEFAULT_CITY_ID, category: "景点", limit: 5 }).then(setNearby);
   }, []);
 
-  const detail = poi ? poiToScenicSpot(poi) : scenicSpots[1];
+  const detail = poi ? poiToScenicSpot(poi) : scenicSpots[0];
+  const openingSummary = summarizeOpeningHours(poi?.openingHours);
+  const suitableGroups = splitSuitableGroups(poi?.suitableFor);
+  const crowdTone = detail.crowd === "舒适" || detail.crowd === "较少" ? "green" : detail.crowd === "适中" ? "orange" : "red";
+  const overviewItems = [
+    { label: "数据来源", value: poi?.source?.provider ?? "fallback/demo" },
+    { label: "所属城市", value: DEFAULT_CITY_OFFICIAL_NAME },
+    { label: "坐标系", value: poi?.coordinateSystem ?? "GCJ-02" },
+    { label: "地址", value: poi?.address ?? "武汉市武昌区蛇山西山坡特1号", wide: true }
+  ];
   return (
-    <div className="container grid">
-      <div className="split">
-        <section className="hero" style={{ margin: 0, borderRadius: 8, "--hero-image": `url(${detail.image})` } as React.CSSProperties}>
-          <div className="hero-content hero-left">
+    <div className="container grid spot-detail-page">
+      <div className="split spot-detail-intro">
+        <section className="hero spot-detail-hero" style={{ margin: 0, borderRadius: 8, "--hero-image": `url(${detail.image})` } as React.CSSProperties}>
+          <div className="hero-content hero-left spot-detail-hero-copy">
             <div className="filters">{detail.tags.slice(0, 3).map((tag) => <StatusTag key={tag} tone={tag.includes("国家") ? "green" : "slate"}>{tag}</StatusTag>)}</div>
             <h1>{detail.name}</h1>
-            <p>{poi?.description ?? "千年古刹，禅宗文化底蕴深厚。适合文化深读、祈福参访与飞来峰石刻联游。"}</p>
-            <div className="filters">
+            <p>{poi?.description ?? "江南三大名楼之一，适合登楼远眺长江、了解荆楚文化与武汉城市地标故事。"}</p>
+            <div className="filters spot-detail-actions">
               <Link className="primary-btn" to="/plan">加入行程</Link>
-              <Link className="primary-btn" to="/ticket/leifeng">立即预约</Link>
+              <Link className="primary-btn" to={DEFAULT_TICKET_ROUTE}>立即预约</Link>
               <button className="ghost-btn"><Headphones size={16} />语音导览</button>
             </div>
           </div>
         </section>
-        <aside className="card card-pad">
-          <h2>景点概览</h2>
-          {[
-            `数据来源：${poi?.source?.provider ?? "fallback/demo"}`,
-            `所属城市：杭州市`,
-            `地址：${poi?.address ?? "法云弄1号"}`,
-            `坐标系：${poi?.coordinateSystem ?? "GCJ-02"}`
-          ].map((item) => <p key={item}><StatusTag tone="slate">{item.split("：")[0]}</StatusTag> {item.split("：")[1]}</p>)}
-          <MapPanel compact scenic pois={poi ? [poi] : []} />
+        <aside className="card card-pad spot-overview-card">
+          <div className="spot-overview-head">
+            <span>景点概览</span>
+            <h2>{detail.name}</h2>
+            <p>{detail.tags.slice(0, 2).join(" · ") || "城市文旅点位"}</p>
+          </div>
+          <dl className="spot-overview-grid">
+            {overviewItems.map((item) => (
+              <div className={item.wide ? "wide" : undefined} key={item.label}>
+                <dt>{item.label}</dt>
+                <dd>{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="spot-overview-map">
+            <MapPanel compact scenic pois={poi ? [poi] : []} />
+          </div>
         </aside>
       </div>
       <div className="tab-strip">
         {tabs.map((item) => <button className={tab === item ? "primary-btn" : "ghost-btn"} key={item} onClick={() => setTab(item)}>{item}</button>)}
       </div>
-      <div className="grid grid-4">
-        <Section title="开放时间"><p>{poi?.openingHours ?? "以官方公告为准"}</p><StatusTag tone="green">当前客流 中等</StatusTag></Section>
-        <Section title="建议游玩时长"><h2>{poi?.suggestedDuration ?? "2 - 3 小时"}</h2><p className="muted">深度游览可按体力和排队情况调整。</p></Section>
-        <Section title="适合人群"><p>{poi?.suitableFor ?? "历史文化爱好者、亲子家庭、祈福礼佛人士、摄影爱好者。"}</p></Section>
-        <Section title="AI讲解"><p>已生成「飞来峰造像」「灵隐禅宗」「江南寺院建筑」三段音频。</p><button className="ghost-btn"><Headphones size={16} />开始讲解</button></Section>
+      <div className="grid spot-detail-facts">
+        <Section title="开放时间" subtitle="日场、夜场分开入园" className="spot-fact-card spot-opening-card">
+          <div className="opening-summary">
+            {openingSummary.periods.map((period) => (
+              <div className="opening-period" key={period.label}>
+                <span>{period.label}</span>
+                <strong>{period.time}</strong>
+                <small>{period.meta}</small>
+              </div>
+            ))}
+          </div>
+          <p className="spot-note">{openingSummary.notice}</p>
+          <div className="spot-fact-footer">
+            <StatusTag tone={crowdTone}>当前客流 {detail.crowd}</StatusTag>
+            <span>建议提前 15 分钟到达入口</span>
+          </div>
+        </Section>
+        <Section title="建议游玩时长" className="spot-fact-card spot-duration-card">
+          <div className="fact-metric">
+            <strong>{poi?.suggestedDuration ?? detail.duration ?? "2-3 小时"}</strong>
+            <span>登楼观景 + 文化展陈</span>
+          </div>
+          <p className="muted">深度游览可按体力、天气和排队情况弹性调整。</p>
+        </Section>
+        <Section title="适合人群" className="spot-fact-card spot-audience-card">
+          <div className="audience-chip-list">
+            {suitableGroups.map((group) => <StatusTag key={group} tone="slate">{group}</StatusTag>)}
+          </div>
+          <p className="muted">偏轻量城市观光，适合与周边 Citywalk 或江滩路线串联。</p>
+        </Section>
+        <Section title="AI讲解" className="spot-fact-card spot-audio-card">
+          <p>已生成 3 段主题音频，覆盖名楼故事、长江与武汉、荆楚文化。</p>
+          <div className="audio-topic-list">
+            {["名楼故事", "长江武汉", "荆楚文化"].map((topic) => <span key={topic}>{topic}</span>)}
+          </div>
+          <button className="ghost-btn"><Headphones size={16} />开始讲解</button>
+        </Section>
       </div>
       <div className="split">
-        <Section title="票务与地图位置">
-          {["灵隐寺香花券（含飞来峰） ￥45", "灵隐寺年卡 ￥180", "导游讲解服务 ￥100起"].map((item) => <p key={item}><Ticket size={16} color="var(--blue)" /> {item} <Link className="subtle-link" to="/ticket/leifeng">预订</Link></p>)}
-          <MapPanel compact scenic pois={poi ? [poi] : []} />
+        <Section title="票务与地图位置" className="ticket-map-section">
+          <div className="ticket-map-grid">
+            {[
+              ["成人票候选", "黄鹤楼 sandbox", 40],
+              ["儿童/学生票候选", "黄鹤楼演示票", 20],
+              ["语音讲解演示包", "登楼观江讲解", 30]
+            ].map(([title, desc, price]) => (
+              <div className="ticket-map-option" key={title}>
+                <span><Ticket size={15} /></span>
+                <div>
+                  <strong>{title}</strong>
+                  <small>{desc}</small>
+                </div>
+                <b>￥{price}</b>
+                <Link className="subtle-link" to={DEFAULT_TICKET_ROUTE}>预订</Link>
+              </div>
+            ))}
+          </div>
+          <div className="ticket-map-preview">
+            <MapPanel compact scenic pois={poi ? [poi] : []} />
+          </div>
         </Section>
-        <Section title="周边推荐">
+        <Section title="周边推荐" className="spot-nearby-section">
           {(nearby.length ? nearby.map(poiToScenicSpot) : scenicSpots.slice(1, 5)).map((spot) => <SpotCard key={spot.name} spot={spot} compact />)}
         </Section>
       </div>
@@ -430,7 +705,7 @@ export function TicketBookingPage() {
   const amount = (ticket?.price ?? 40) * count + 30;
 
   useEffect(() => {
-    fetchTicketOptions("ticket-leifeng-demo", date).then(({ products: nextProducts, slots: nextSlots }) => {
+    fetchTicketOptions(DEFAULT_TICKET_DEMO_POI_ID, date).then(({ products: nextProducts, slots: nextSlots }) => {
       setProducts(nextProducts);
       setSlots(nextSlots);
       setTicket(nextProducts[0]);
@@ -461,8 +736,8 @@ export function TicketBookingPage() {
       const nextLock = await lockTickets({ productId: ticket.id, slotId: slot.id, visitDate: date, quantity: count });
       setLock(nextLock);
       const order = await createOrder({
-        title: `雷峰塔 ${ticket.name} x${count}`,
-        poiId: "ticket-leifeng-demo",
+        title: `${DEFAULT_TICKET_POI_NAME} ${ticket.name} x${count}`,
+        poiId: DEFAULT_TICKET_DEMO_POI_ID,
         ticketId: ticket.id,
         ticketName: ticket.name,
         slotId: slot.id,
@@ -471,7 +746,7 @@ export function TicketBookingPage() {
         quantity: count,
         amount,
         lockId: nextLock.id,
-        image: spotImages.leifeng,
+        image: spotImages.yellowCraneTower,
         visitorInfo: ([
           { name: "张小文", credentialType: "id-card", credentialNo: "330***********1234" },
           { name: "李小明", credentialType: "id-card", credentialNo: "330***********5678" }
@@ -485,18 +760,64 @@ export function TicketBookingPage() {
   };
   return (
     <div className="container grid ticket-page">
-      <section className="hero booking-hero" style={{ margin: 0, borderRadius: 8, "--hero-image": `url(${spotImages.leifeng})` } as React.CSSProperties}>
-        <div className="hero-content hero-left">
-          <Link className="subtle-link" to="/spot/lingyin" style={{ color: "white" }}>返回景点</Link>
-          <h1>杭州西湖景区 · 雷峰塔</h1>
-          <p>4.8 分，12,856 条评价。登塔俯瞰西湖全景，支持官方票源预约、电子凭证核销与智能讲解套餐。</p>
-          <div className="filters"><StatusTag tone="blue">5A景区</StatusTag><StatusTag tone="gold">西湖十景</StatusTag><StatusTag tone="slate">历史文化名塔</StatusTag></div>
+      <section className="hero booking-hero" style={{ margin: 0, borderRadius: 8, "--hero-image": `url(${spotImages.yellowCraneTower})` } as React.CSSProperties}>
+        <div className="hero-content hero-left booking-hero-copy">
+          <Link className="subtle-link booking-hero-back" to="/spot/yellow-crane-tower">返回景点详情</Link>
+          <div className="booking-hero-title">
+            <span className="hero-eyebrow">Sandbox Scenic Booking</span>
+            <h1>{DEFAULT_CITY_NAME}文旅演示票务 · {DEFAULT_TICKET_POI_NAME}</h1>
+            <p>基于黄鹤楼真实 POI 做票务链路演示，电子凭证、支付和库存均为 sandbox 流程，不代表真实官方库存或真实扣款。</p>
+          </div>
+          <div className="booking-hero-facts" aria-label={`${DEFAULT_TICKET_POI_NAME}预约关键数据`}>
+            {ticketHeroFacts.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div className="booking-hero-fact" key={item.label}>
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <small>{item.desc}</small>
+                </div>
+              );
+            })}
+          </div>
+          <div className="filters booking-hero-tags">
+            <StatusTag tone="blue">5A景区</StatusTag>
+            <StatusTag tone="gold">江城地标</StatusTag>
+            <StatusTag tone="slate">历史文化名楼</StatusTag>
+          </div>
+          <div className="booking-hero-actions">
+            <a className="primary-btn" href="#ticket-options"><Ticket size={16} />立即预约</a>
+            <Link className="ghost-btn" to="/map"><MapPin size={16} />查看导航</Link>
+            <Link className="ghost-btn" to="/immersive"><Headphones size={16} />智能讲解</Link>
+          </div>
+        </div>
+        <div className="booking-hero-visual">
+          <img src={spotImages.yellowCraneTower} alt={`${DEFAULT_TICKET_POI_NAME}景区实景`} />
+          <div className="booking-hero-visual-card">
+            <span>今日推荐时段</span>
+            <strong>上午登楼观江</strong>
+            <small>演示建议：上午客流更平稳，适合登楼远眺长江与武昌城景。</small>
+          </div>
         </div>
       </section>
+      <div className="booking-meta-row">
+        {[
+          ["演示库存", "sandbox 候选库存"],
+          ["实名预约", "入园信息可追溯"],
+          ["15分钟锁票", "提交后保留库存"],
+          ["电子凭证", "二维码/身份证核销"]
+        ].map(([title, desc]) => (
+          <div key={title}>
+            <strong>{title}</strong>
+            <span>{desc}</span>
+          </div>
+        ))}
+      </div>
       <div className="split">
-        <main className="card card-pad booking-panel">
+        <main className="card card-pad booking-panel" id="ticket-options">
           <div className="step-title"><span>1</span><strong>选择票种</strong></div>
-          <div className="grid grid-5">{(products.length ? products : ticketOptions.map((item, index) => ({ id: item.name, poiId: "ticket-leifeng-demo", name: item.name, desc: item.desc, price: item.price, stock: 80 - index * 8, status: index === 3 ? "low" : index === 4 ? "verify" : "available" } as TicketProduct))).map((option) => {
+          <div className="grid grid-5">{(products.length ? products : ticketOptions.map((item, index) => ({ id: item.name, poiId: DEFAULT_TICKET_DEMO_POI_ID, name: item.name, desc: item.desc, price: item.price, stock: 80 - index * 8, status: index === 3 ? "low" : index === 4 ? "verify" : "available" } as TicketProduct))).map((option) => {
             const stock = statusForStock(option.status);
             return <TicketOption key={option.id} title={option.name} desc={option.desc} price={option.price} stock={stock.label} selected={ticket?.id === option.id} onClick={() => setTicket(option)} />;
           })}</div>
@@ -515,13 +836,28 @@ export function TicketBookingPage() {
             <StatusTag tone={ticket ? statusForStock(ticket.status).tone : "green"}>{ticket ? statusForStock(ticket.status).label : "库存充足"}</StatusTag>
           </div>
           <div className="step-title"><span>5</span><strong>电子凭证预览</strong></div>
-          <VoucherPreview />
+          <VoucherPreview
+            title={`${DEFAULT_CITY_NAME}文旅演示票务 · ${DEFAULT_TICKET_POI_NAME}`}
+            ticketName={ticket?.name ?? "成人票"}
+            visitDate={date}
+            slotTime={slot?.time ?? "08:00-10:00"}
+            quantity={count}
+            amount={amount}
+            gate="黄鹤楼景区西门"
+            holderNames={["张小文", "李小明"]}
+          />
         </main>
         <aside className="grid order-summary">
           <Section title="订单信息" className="order-summary-card">
-            <div className="spot-card compact">
-              <img src={spotImages.leifeng} alt="雷峰塔" />
-              <div><h3>杭州西湖景区 · 雷峰塔</h3><p className="muted">开放时间：08:00-17:30</p><StatusTag tone="blue">5A景区</StatusTag></div>
+            <div className="booking-summary-spot">
+              <img src={spotImages.yellowCraneTower} alt={DEFAULT_TICKET_POI_NAME} />
+              <div className="booking-summary-spot-copy">
+                <h3>{DEFAULT_CITY_NAME}文旅演示票务 · {DEFAULT_TICKET_POI_NAME}</h3>
+                <div className="booking-summary-meta">
+                  <span><Clock3 size={14} /> 08:00-17:30</span>
+                  <StatusTag tone="blue">5A景区</StatusTag>
+                </div>
+              </div>
             </div>
             <p>入园日期：<strong>{date}</strong></p>
             <p>入园时段：<strong>{slot?.time ?? "08:00-10:00"}</strong></p>
@@ -529,15 +865,28 @@ export function TicketBookingPage() {
             {lock ? <p><StatusTag tone={lock.status === "active" ? "green" : "orange"}>锁票{lock.status}</StatusTag> 剩余 {Math.floor(lockSeconds / 60)}:{String(lockSeconds % 60).padStart(2, "0")}</p> : null}
             <hr />
             <p>票价明细：￥{ticket?.price ?? 40} x {count}</p>
-            <p>登塔观景 + 语音讲解：￥30</p>
+            <p>登楼观江 + 语音讲解演示包：￥30</p>
             <h2 style={{ color: "var(--red)" }}>￥{amount}</h2>
             {message ? <p className="muted" style={{ color: "var(--red)" }}>{message}</p> : null}
             <button className="primary-btn" style={{ width: "100%" }} onClick={submitOrder}>提交订单</button>
-            <p className="muted"><ShieldCheck size={16} /> 官方票源保障，支付安全放心</p>
+            <p className="muted"><ShieldCheck size={16} /> sandbox 演示流程，不代表真实出票或真实支付。</p>
           </Section>
           <Section title="使用流程">
-            <div className="grid grid-4">
-              {["提交订单", "获取凭证", "扫码入园", "快乐游玩"].map((item) => <div className="empty-state" key={item}>{item}</div>)}
+            <div className="ticket-flow-grid">
+              {ticketUseSteps.map((step, index) => {
+                const Icon = step.icon;
+                return (
+                  <div className="ticket-flow-card" key={step.title}>
+                    <div className="ticket-flow-head">
+                      <span>{index + 1}</span>
+                      <Icon size={18} />
+                    </div>
+                    <strong>{step.title}</strong>
+                    <p>{step.desc}</p>
+                    <small>{step.note}</small>
+                  </div>
+                );
+              })}
             </div>
           </Section>
         </aside>
@@ -561,10 +910,19 @@ export function TicketDetailPage() {
         <Section title="已支付 · 待使用" subtitle="出行前请携带有效身份证件，按预约时段入园">
           <div className="grid grid-2">
             <div className="spot-card">
-              <img src={order?.image ?? spotImages.leifeng} alt="雷峰塔" />
-              <div><h2>{order?.title ?? "杭州西湖景区 · 雷峰塔"}</h2><p>预约日期：{order?.visitDate ?? "2026-06-06"}</p><p>入园时段：{order?.slotTime ?? "08:00-10:00"}</p><p>入口：雷峰塔景区南门</p></div>
+              <img src={order?.image ?? spotImages.yellowCraneTower} alt={DEFAULT_TICKET_POI_NAME} />
+              <div><h2>{order?.title ?? `${DEFAULT_CITY_NAME}文旅演示票务 · ${DEFAULT_TICKET_POI_NAME}`}</h2><p>预约日期：{order?.visitDate ?? "2026-06-06"}</p><p>入园时段：{order?.slotTime ?? "08:00-10:00"}</p><p>入口：黄鹤楼景区西门</p></div>
             </div>
-            <VoucherPreview />
+            <VoucherPreview
+              title={`${DEFAULT_CITY_NAME}文旅演示票务 · ${DEFAULT_TICKET_POI_NAME}`}
+              ticketName={order?.ticketName ?? "成人票"}
+              visitDate={order?.visitDate ?? "2026-06-06"}
+              slotTime={order?.slotTime ?? "08:00-10:00"}
+              quantity={order?.quantity ?? 2}
+              amount={order?.amount}
+              gate="黄鹤楼景区西门"
+              holderNames={order?.visitorInfo?.map((visitor) => visitor.name) ?? ["张小文", "李小明"]}
+            />
           </div>
         </Section>
         <Section title="订单进度">
@@ -578,10 +936,10 @@ export function TicketDetailPage() {
       </main>
       <aside className="grid">
         <Section title="出行提醒">
-          {["今日天气 26℃ 晴，空气优", "地铁 4 号线水澄桥站 B 口出，步行约 12 分钟", "景区实行实名预约，请携带身份证原件入园"].map((item) => <p key={item}><StatusTag tone="blue">提醒</StatusTag> {item}</p>)}
+          {["今日天气 26℃ 晴，空气优", "地铁 5 号线司门口黄鹤楼站出，步行约 12 分钟", "当前为 sandbox 演示票务，真实入园规则以景区官方公告为准"].map((item) => <p key={item}><StatusTag tone="blue">提醒</StatusTag> {item}</p>)}
         </Section>
         <Section title="推荐关联服务">
-          {["西湖游船（环湖观光）￥55起", "雷峰塔登塔讲解 ￥38起", "西湖一日游精品团 ￥198起"].map((item) => <p key={item}>{item}<button className="ghost-btn">预订</button></p>)}
+          {["江汉关夜游导览 ￥55起", "黄鹤楼登楼讲解演示包 ￥38起", "武汉一日游精品路线 ￥198起"].map((item) => <p key={item}>{item}<button className="ghost-btn">预订</button></p>)}
         </Section>
       </aside>
       </div>
@@ -680,6 +1038,12 @@ export function PayPage() {
 export function MePage() {
   const [tab, setTab] = useState("全部行程");
   const [storedOrders, setStoredOrders] = useState<Order[]>([]);
+  const profileStats = [
+    { value: "12", label: "收藏" },
+    { value: "8", label: "关注" },
+    { value: "3", label: "优惠券" }
+  ];
+  const profileMenu = ["我的行程", "订单管理", "我的收藏", "消息通知", "账户设置"];
 
   useEffect(() => {
     fetchOrders().then((remoteOrders) => {
@@ -691,19 +1055,24 @@ export function MePage() {
     ? storedOrders.map((order) => ({ id: order.id, title: order.title, status: orderStatusLabel(order.status), amount: order.amount, date: `${order.visitDate} ${order.slotTime}`, image: order.image }))
     : orders;
   return (
-    <div className="container wide-split">
-      <aside className="card card-pad">
+    <div className="container wide-split me-layout">
+      <aside className="card card-pad profile-sidebar" aria-label="个人中心导航">
         <div className="profile-card">
           <span className="avatar" />
           <h2>张小文</h2>
           <StatusTag tone="blue">Lv4 旅行达人</StatusTag>
-          <div className="grid grid-3">
-            {["12 收藏", "8 关注", "3 优惠券"].map((item) => <div className="empty-state" key={item}>{item}</div>)}
+          <div className="profile-stats" aria-label="个人数据概览">
+            {profileStats.map((item) => (
+              <div className="profile-stat" key={item.label}>
+                <strong>{item.value}</strong>
+                <span>{item.label}</span>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="grid" style={{ marginTop: 16 }}>
-          {["我的行程", "订单管理", "我的收藏", "消息通知", "账户设置"].map((item) => <button className={item === "我的行程" ? "primary-btn" : "ghost-btn"} key={item}>{item}</button>)}
-        </div>
+        <nav className="profile-menu" aria-label="个人中心菜单">
+          {profileMenu.map((item) => <button className={item === "我的行程" ? "primary-btn" : "ghost-btn"} key={item}>{item}</button>)}
+        </nav>
       </aside>
       <main className="grid">
         <div className="dashboard-title">
@@ -722,8 +1091,23 @@ export function MePage() {
         </Section>
       </main>
       <aside className="grid">
-        <Section title="行程时间轴">
-          {["06-06 09:00 杭州东站 已出票", "06-06 10:15 西湖景区 已预约", "06-06 18:30 灵隐寺 已预约", "06-08 15:20 杭州东站 已出票"].map((item) => <p key={item}><StatusTag tone="green">已同步</StatusTag> {item}</p>)}
+        <Section title="行程时间轴" className="trip-timeline-panel">
+          <div className="trip-timeline">
+            {tripTimelineItems.map((item, index) => (
+              <article className="trip-timeline-item" key={`${item.date}-${item.time}-${item.place}`}>
+                <span className="trip-timeline-node">{index + 1}</span>
+                <time className="trip-timeline-time" dateTime={`2026-${item.date}T${item.time}:00`}>
+                  <strong>{item.time}</strong>
+                  <span>{item.date}</span>
+                </time>
+                <div className="trip-timeline-copy">
+                  <strong>{item.place}</strong>
+                  <small>{item.desc}</small>
+                </div>
+                <StatusTag tone={item.tone}>{item.status}</StatusTag>
+              </article>
+            ))}
+          </div>
         </Section>
         <Section title="我的收藏">
           {scenicSpots.slice(0, 3).map((spot) => <SpotCard key={spot.name} spot={spot} compact />)}
@@ -735,46 +1119,75 @@ export function MePage() {
 
 export function PackagesPage() {
   const [cart, setCart] = useState(2);
+  const selectedPackages = packages.slice(0, cart);
+  const subtotal = selectedPackages.reduce((total, pack) => total + pack.price, 0);
+  const discount = selectedPackages.length >= 2 ? 120 : 0;
+  const payable = Math.max(subtotal - discount, 0);
+  const formatCurrency = (value: number) => `￥${value.toLocaleString("zh-CN")}`;
+
   return (
     <div className="container split">
       <main className="grid">
-        <section className="hero" style={{ margin: 0, borderRadius: 8, minHeight: 250, "--hero-image": `url(${spotImages.night})` } as React.CSSProperties}>
-          <div className="hero-content hero-left">
-            <StatusTag tone="blue">活动推荐</StatusTag>
-            <h1>商旅联动 / 套餐推荐</h1>
-            <p>一站式预订，多品类组合，可报销更省心。让景区 + 餐饮 + 酒店 + 交通形成联动消费。</p>
+        <section className="hero packages-hero" style={{ "--hero-image": `url(${spotImages.night})` } as React.CSSProperties}>
+          <div className="packages-hero-copy">
+            <span className="packages-hero-eyebrow">活动推荐</span>
+            <h1><span>商旅联动</span><span>套餐推荐</span></h1>
+            <p>一站式预订，多品类组合，可报销更省心。让景区、餐饮、酒店与交通形成联动消费。</p>
+            <div className="packages-hero-tags" aria-label="套餐能力">
+              {["景区门票", "餐饮券", "酒店套餐", "交通接驳"].map((item) => <span key={item}>{item}</span>)}
+            </div>
           </div>
         </section>
-        <Section title="精选套餐推荐" action={<div className="filters"><button className="ghost-btn">门票+酒店</button><button className="ghost-btn">演出+夜游</button><button className="ghost-btn">出行日期</button></div>}>
-          <div className="grid grid-2">
+        <Section title="精选套餐推荐" className="package-section" action={<div className="filters"><button className="ghost-btn">门票+酒店</button><button className="ghost-btn">演出+夜游</button><button className="ghost-btn">出行日期</button></div>}>
+          <div className="package-grid">
             {packages.map((pack) => (
-              <article className="card spot-card" key={pack.name}>
-                <img src={pack.image} alt={pack.name} />
-                <div>
+              <article className="card package-card" key={pack.name}>
+                <div className="package-media">
+                  <img src={pack.image} alt={pack.name} />
                   <StatusTag tone="blue">{pack.type}</StatusTag>
+                </div>
+                <div className="package-copy">
                   <h3>{pack.name}</h3>
                   <p className="muted">{pack.desc}</p>
-                  <div className="filters tiny-gap">{pack.tags.map((tag) => <StatusTag key={tag} tone="slate">{tag}</StatusTag>)}</div>
-                  <p><strong style={{ color: "var(--red)", fontSize: 22 }}>￥{pack.price}</strong> <span className="muted">起 省￥{pack.save}</span></p>
-                  <button className="ghost-btn" onClick={() => setCart(cart + 1)}>加入清单</button>
+                  <div className="package-tags">{pack.tags.map((tag) => <StatusTag key={tag} tone="slate">{tag}</StatusTag>)}</div>
+                </div>
+                <div className="package-buy">
+                  <div className="package-price">
+                    <strong>￥{pack.price}</strong>
+                    <span>套餐价 / 起</span>
+                    <small>立省 ￥{pack.save}</small>
+                    <del>原价 ￥{pack.origin}</del>
+                  </div>
+                  <button className="ghost-btn" onClick={() => setCart((current) => Math.min(packages.length, current + 1))}><Plus size={16} />加入清单</button>
                 </div>
               </article>
             ))}
           </div>
         </Section>
       </main>
-      <aside className="grid">
-        <Section title="我的行程清单" action={<button className="subtle-link">清空</button>}>
-          {packages.slice(0, cart).map((pack) => (
-            <div className="spot-card compact" key={pack.name}>
-              <img src={pack.image} alt={pack.name} />
-              <div><strong>{pack.name}</strong><p className="muted">出行日期：2026-06-07</p><h3 style={{ color: "var(--red)" }}>￥{pack.price}</h3></div>
+      <aside className="grid packages-aside">
+        <Section title="我的行程清单" className="cart-panel" action={<button className="subtle-link" onClick={() => setCart(0)}>清空</button>}>
+          <div className="cart-list">
+            {selectedPackages.map((pack) => (
+              <article className="cart-item" key={pack.name}>
+                <img src={pack.image} alt={pack.name} />
+                <div className="cart-item-copy">
+                  <strong>{pack.name}</strong>
+                  <span>出行日期：2026-06-07</span>
+                </div>
+                <b>{formatCurrency(pack.price)}</b>
+              </article>
+            ))}
+          </div>
+          <div className="cart-summary">
+            <p><span>商品总额</span><b>{formatCurrency(subtotal)}</b></p>
+            <p><span>优惠券</span><b className="discount">-{formatCurrency(discount)}</b></p>
+            <div className="cart-total">
+              <span>应付合计</span>
+              <strong>{formatCurrency(payable)}</strong>
             </div>
-          ))}
-          <p>商品总额 <b style={{ float: "right" }}>￥1,586</b></p>
-          <p>优惠券 <b style={{ float: "right", color: "var(--red)" }}>-￥120</b></p>
-          <h2 style={{ color: "var(--red)" }}>￥1,466</h2>
-          <Link className="primary-btn" to="/pay">去结算（{cart}）</Link>
+            <Link className={`primary-btn cart-checkout ${selectedPackages.length ? "" : "disabled-link"}`} to={selectedPackages.length ? "/pay" : "/packages"}>去结算（{selectedPackages.length}）</Link>
+          </div>
         </Section>
         <Section title="发票信息">
           <p>增值税电子普通发票（个人/单位），支持订单完成后在线申请。</p>
@@ -785,12 +1198,12 @@ export function PackagesPage() {
 }
 
 export function ImmersivePage() {
-  const [scene, setScene] = useState("雷峰塔");
+  const [scene, setScene] = useState(DEFAULT_TICKET_POI_NAME);
   return (
     <div className="container wide-split">
       <aside className="grid">
         <Section title="选择场景">
-          {["雷峰塔", "宋城", "灵隐寺", "西湖夜游"].map((item, index) => (
+          {[DEFAULT_TICKET_POI_NAME, "江汉关博物馆", "湖北省博物馆", "汉口江滩夜游"].map((item, index) => (
             <button key={item} className={scene === item ? "primary-btn" : "ghost-btn"} onClick={() => setScene(item)}>{index + 1}. {item}</button>
           ))}
         </Section>
@@ -802,11 +1215,11 @@ export function ImmersivePage() {
         </div>
         <div className="ar-stage">
           {[
-            ["塔顶风光", "重高远迈", 48, 18],
-            ["白蛇子传说", "历史典故", 18, 38],
-            ["历史复原", "重看南宋晚韵", 76, 35],
-            ["雷峰夕照", "西湖十景之一", 36, 72],
-            ["佛教文化", "佛塔历史与建筑", 70, 68]
+            ["楼顶观江", "长江视野", 48, 18],
+            ["名楼故事", "历史典故", 18, 38],
+            ["城市复原", "重看江城变迁", 76, 35],
+            ["蛇山风景", "武汉城市地标", 36, 72],
+            ["荆楚文化", "楼阁历史与建筑", 70, 68]
           ].map(([title, desc, x, y]) => <span className="ar-hotspot" key={title as string} style={{ left: `${x}%`, top: `${y}%` }}>{title}<small>{desc}</small></span>)}
         </div>
         <Section title="推荐体验场景 / 故事">
@@ -818,11 +1231,11 @@ export function ImmersivePage() {
       <aside className="grid">
         <Section title={scene}>
           <StatusTag tone="blue">5A景区</StatusTag>
-          <p>雷峰塔又名皇妃塔，位于西湖南岸夕照山的雷峰上，是西湖十景之一。</p>
+          <p>{DEFAULT_TICKET_POI_NAME}位于武汉市武昌区蛇山，是江城代表性文化地标之一。</p>
           <div className="timeline" style={{ paddingLeft: 24 }}>
-            {["塔顶风光", "白蛇子传说", "历史复原", "佛教文化"].map((item, i) => <div className="timeline-item" key={item}><strong>{i + 1}</strong><div>{item}<button className="icon-btn" style={{ width: 34, height: 34 }}><Headphones size={15} /></button></div></div>)}
+            {["楼顶观江", "名楼故事", "城市复原", "荆楚文化"].map((item, i) => <div className="timeline-item" key={item}><strong>{i + 1}</strong><div>{item}<button className="icon-btn" style={{ width: 34, height: 34 }}><Headphones size={15} /></button></div></div>)}
           </div>
-          <Link className="primary-btn" to="/spot/lingyin">进入全景</Link>
+          <Link className="primary-btn" to="/spot/yellow-crane-tower">进入全景</Link>
           <div className="grid grid-2"><button className="ghost-btn">AR导览</button><button className="ghost-btn">加入行程</button><button className="ghost-btn">分享</button><button className="ghost-btn">收藏</button></div>
         </Section>
       </aside>
@@ -832,61 +1245,164 @@ export function ImmersivePage() {
 
 export function MapPage() {
   const [mode, setMode] = useState("最短路");
+  const [activeLayers, setActiveLayers] = useState<Set<MapLayerLabel>>(() => new Set(mapLayerItems.map((item) => item.label)));
   const [pois, setPois] = useState<Poi[]>([]);
   const [route, setRoute] = useState<RouteResult | undefined>();
 
   useEffect(() => {
-    fetchPois({ cityId: "hangzhou", category: "景点", limit: 5 }).then(setPois);
+    fetchPois({ cityId: DEFAULT_CITY_ID, category: "景点", limit: 5 }).then(setPois);
   }, []);
 
   useEffect(() => {
     const routeMode = mode === "最短路" || mode === "轻松走" || mode === "亲子游" || mode === "文化深读" || mode === "无障碍" ? "walking" : "walking";
-    fetchRoute({ mode: routeMode, preferences: [mode] }).then(setRoute).catch(() => setRoute(undefined));
+    fetchRoute({ cityId: DEFAULT_CITY_ID, mode: routeMode, preferences: [mode] }).then(setRoute).catch(() => setRoute(undefined));
   }, [mode]);
 
   const routePois = pois.length ? pois : [];
+  const routeStopNames = route?.waypointNames.length ? route.waypointNames : routePois.length ? routePois.map((poi) => poi.name) : ["黄鹤楼", "江汉关博物馆", "汉口江滩-观江台", "湖北省博物馆", "保成路夜市"];
+  const routeSummary = route ? `约 ${(route.distanceMeters / 1000).toFixed(1)} 公里 · ${route.durationMinutes} 分钟 · ${route.provider}${route.fallback ? " fallback" : ""}` : "路线服务加载中";
+  const routeDistanceLabel = route ? `${(route.distanceMeters / 1000).toFixed(1)} 公里` : "计算中";
+  const routeDurationLabel = route ? `${route.durationMinutes} 分钟` : "计算中";
+  const nearbySpots = routePois.length ? routePois.slice(1, 4).map(poiToScenicSpot) : scenicSpots.slice(1, 4);
+  const toggleLayer = (label: MapLayerLabel) => {
+    setActiveLayers((current) => {
+      const next = new Set(current);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="container wide-split map-layout">
-      <aside className="grid map-rail">
-        <Section title="路线模式" className="rail-section">
-          <div className="grid grid-2">
+    <div className="map-layout map-fullscreen" aria-label="智能导览地图工作台">
+      <MapPanel scenic pois={pois} route={route} />
+      <div className="map-overlay-grid">
+        <section className="map-surface map-command-surface" aria-label="地图搜索">
+          <div className="map-command-heading">
+            <div>
+              <span className="eyebrow">Smart Guide</span>
+              <h1>智能导览</h1>
+              <p>AI 伴你游，畅玩每一步。</p>
+            </div>
+            <StatusTag tone="blue">实时路线</StatusTag>
+          </div>
+          <label className="search-pill compact-input map-search">
+            <Search size={18} />
+            <input aria-label="搜索景点、服务、设施" placeholder="搜索景点、服务、设施（如：黄鹤楼、卫生间、停车场）" />
+            <button className="icon-btn" type="button" aria-label="语音搜索"><Mic size={18} /></button>
+          </label>
+          <div className="map-command-metrics" aria-label="当前导览状态">
+            <span><Navigation size={14} />{routeDistanceLabel}</span>
+            <span><Clock3 size={14} />{routeDurationLabel}</span>
+            <span><MapPin size={14} />{routeStopNames.length} 个点位</span>
+            <span><Landmark size={14} />{activeLayers.size} 个图层</span>
+          </div>
+        </section>
+
+        <aside className="map-surface map-control-panel" aria-label="路线与图层控制">
+          <div className="map-panel-title">
+            <div>
+              <h2>路线模式</h2>
+              <span>按同行人、体力与兴趣重排</span>
+            </div>
+          </div>
+          <div className="map-mode-grid">
             {["最短路", "轻松走", "亲子游", "文化深读", "无障碍"].map((item) => <button className={mode === item ? "primary-btn" : "ghost-btn"} key={item} onClick={() => setMode(item)}>{item}</button>)}
           </div>
-        </Section>
-        <Section title="地图图层" className="rail-section">
-          {["景点", "卫生间", "母婴室", "停车场", "无障碍设施", "餐饮"].map((item) => <p key={item}><StatusTag tone="blue">开</StatusTag> {item}</p>)}
-        </Section>
-        <Section title="客流拥堵预警" className="rail-section alert-section">
-          <p><StatusTag tone="red">较拥挤 76%</StatusTag> 西湖景区核心区预计 10:00-13:00 进入高峰。</p>
-          <button className="ghost-btn">查看实时客流</button>
-        </Section>
-      </aside>
-      <main className="grid map-main">
-        <div className="dashboard-title">
-          <div><h1>智能导览</h1><p className="muted">AI 伴你游，畅玩每一步。当前模式：{mode}</p></div>
-          <div className="search-pill compact-input"><Search size={18} /><input placeholder="搜索景点、服务、设施（如：灵隐寺、卫生间、停车场）" /><Mic color="var(--blue)" /></div>
-        </div>
-        <MapPanel scenic pois={pois} route={route} />
-        <Section title={`推荐路线（${mode}）`} subtitle={route ? `全程约 ${(route.distanceMeters / 1000).toFixed(1)} 公里 · ${route.durationMinutes} 分钟 · ${route.provider}${route.fallback ? " fallback" : ""}` : "路线服务加载中"}>
-          {route?.failureReason ? <p className="muted">{route.failureReason}</p> : null}
-          <div className="grid grid-5">
-            {(route?.waypointNames.length ? route.waypointNames : routePois.length ? routePois.map((poi) => poi.name) : ["雷峰塔", "苏堤春晓", "三潭印月", "断桥残雪", "白堤"]).map((item, index) => <div className="empty-state" key={item}><StatusTag>{index + 1}</StatusTag><strong>{item}</strong><p className="muted">预计停留 {20 + index * 5} 分钟</p></div>)}
+          <div className="map-panel-divider" />
+          <div className="map-panel-title">
+            <div>
+              <h2>地图图层</h2>
+              <span>筛选当前可见服务点</span>
+            </div>
           </div>
-        </Section>
-      </main>
-      <aside className="grid map-rail">
-        <Section title="雷峰塔" className="rail-section scenic-callout-card">
-          <img src={spotImages.leifeng} alt="雷峰塔" style={{ width: "100%", height: 150, objectFit: "cover", borderRadius: 8 }} />
-          <div className="filters"><StatusTag>历史文化</StatusTag><StatusTag tone="orange">热门景点</StatusTag></div>
-          <p>票务信息：成人票 ￥40，学生票 ￥20。</p>
-          <p><StatusTag tone="orange">较拥挤 76%</StatusTag> 距当前位置 1.2 公里，步行约 18 分钟。</p>
-          <Link className="primary-btn" to="/ticket/leifeng">去这里</Link>
-          <button className="ghost-btn"><Headphones size={16} />语音讲解</button>
-        </Section>
-        <Section title="附近推荐" className="rail-section">
-          {(routePois.length ? routePois.slice(1, 4).map(poiToScenicSpot) : scenicSpots.slice(1, 4)).map((spot) => <SpotCard key={spot.name} spot={spot} compact />)}
-        </Section>
-      </aside>
+          <div className="layer-list map-layer-list">
+            {mapLayerItems.map((item) => {
+              const Icon = item.icon;
+              const selected = activeLayers.has(item.label);
+              return (
+                <button className={`layer-toggle ${selected ? "selected" : ""}`} aria-pressed={selected} key={item.label} onClick={() => toggleLayer(item.label)}>
+                  <span className={`layer-icon ${item.tone}`} aria-hidden="true"><Icon size={16} /></span>
+                  <span className="layer-copy">
+                    <strong>{item.label}</strong>
+                    <small>{selected ? "已显示" : "已隐藏"}</small>
+                  </span>
+                  <span className="layer-switch" aria-hidden="true"><span /></span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="map-alert-card">
+            <StatusTag tone="red">较拥挤 76%</StatusTag>
+            <p>黄鹤楼核心区预计 10:00-13:00 进入高峰。</p>
+            <button className="ghost-btn">查看实时客流</button>
+          </div>
+        </aside>
+
+        <aside className="map-surface map-place-panel" aria-label={`${DEFAULT_TICKET_POI_NAME}景点详情`}>
+          <div className="map-place-head">
+            <div>
+              <h2>{DEFAULT_TICKET_POI_NAME}</h2>
+              <p>距当前位置 1.2 公里 · 步行约 18 分钟</p>
+            </div>
+            <StatusTag tone="orange">较拥挤 76%</StatusTag>
+          </div>
+          <img className="map-place-image" src={spotImages.yellowCraneTower} alt={DEFAULT_TICKET_POI_NAME} />
+          <div className="scenic-callout-tags"><StatusTag>历史文化</StatusTag><StatusTag tone="orange">热门景点</StatusTag></div>
+          <div className="scenic-callout-info">
+            <div className="scenic-price-head">
+              <span><Ticket size={14} />演示票价</span>
+            </div>
+            <div className="scenic-price-grid">
+              <span>成人 <b>￥40</b></span>
+              <span>学生 <b>￥20</b></span>
+            </div>
+            <p><ShieldCheck size={14} />sandbox 演示价，非官方真实票价。</p>
+          </div>
+          <div className="scenic-callout-actions">
+            <Link className="primary-btn" to={DEFAULT_TICKET_ROUTE}><Navigation size={17} />去这里</Link>
+            <button className="ghost-btn"><Headphones size={16} />语音讲解</button>
+          </div>
+          <div className="map-nearby-list">
+            <h3>附近推荐</h3>
+            {nearbySpots.map((spot) => (
+              <Link className="map-nearby-row" to="/spot/yellow-crane-tower" key={spot.name}>
+                <img src={spot.image} alt={spot.name} />
+                <span>
+                  <strong>{spot.name}</strong>
+                  <small>{spot.crowd} · {spot.price ? `￥${spot.price}` : "免费"} · {spot.tags[0]}</small>
+                </span>
+                <b>★ {spot.rating}</b>
+              </Link>
+            ))}
+          </div>
+        </aside>
+
+        <section className="map-surface map-route-panel" aria-label="推荐路线">
+          <div className="map-panel-title map-route-title">
+            <div>
+              <h2>推荐路线（{mode}）</h2>
+              <span>{routeSummary}</span>
+            </div>
+            <button className="ghost-btn"><RefreshCcw size={16} />重排</button>
+          </div>
+          {route?.failureReason ? <p className="muted">{route.failureReason}</p> : null}
+          <ol className="route-stop-list map-route-strip">
+            {routeStopNames.map((item, index) => (
+              <li className="route-stop-card" key={`${item}-${index}`}>
+                <span className="route-stop-index">{index + 1}</span>
+                <div className="route-stop-content">
+                  <strong>{item}</strong>
+                  <span><Clock3 size={15} />预计停留 {20 + index * 5} 分钟</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
     </div>
   );
 }

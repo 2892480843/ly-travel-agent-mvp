@@ -59,7 +59,7 @@ function FilterBar({ dense = false }: { dense?: boolean }) {
     <div className={`card card-pad admin-filter ${dense ? "dense" : ""}`}>
       <div className="filters">
         <input className="field" placeholder="请输入关键词" />
-        <select className="field"><option>全部景区</option><option>西湖风景区</option><option>灵隐飞来峰</option></select>
+        <select className="field"><option>全部景区</option><option>黄鹤楼</option><option>湖北省博物馆</option><option>江汉关博物馆</option></select>
         <select className="field"><option>全部状态</option><option>已发布</option><option>待审核</option></select>
         {!dense ? <input className="field" type="date" defaultValue="2026-06-02" /> : null}
         <button className="primary-btn"><Filter size={16} /> 查询</button>
@@ -74,10 +74,10 @@ export function DashboardPage() {
   const [metrics, setMetrics] = useState({
     kpis,
     alerts: [
-      ["拥堵预警", "光明顶区域密度已达 4.2 人/㎡", "高"],
-      ["库存预警", "玉屏索道票库存不足，剩余 368 张", "中"],
-      ["经营异常", "云上餐厅订单取消率异常偏高", "中"],
-      ["设备提醒", "南大门闸机 3 号通道离线", "低"]
+      ["拥堵预警", "黄鹤楼核心区域密度已达 4.2 人/㎡", "高"],
+      ["库存预警", "黄鹤楼 sandbox 成人票候选库存不足，剩余 368 张", "中"],
+      ["经营异常", "江汉关周边餐饮订单取消率异常偏高", "中"],
+      ["设备提醒", "黄鹤楼西门闸机 3 号通道离线", "低"]
     ],
     hotspots: [
       ["门票预约", "5,842", "24.21%", "+12.35%"],
@@ -100,28 +100,45 @@ export function DashboardPage() {
 
   return (
     <div className="admin-dashboard">
-      <PageHeader
-        eyebrow="智慧文旅运营平台"
-        title="运营看板"
-        subtitle="客流、咨询、转化、订单、投诉、商户表现和活动效果实时联动"
-        actions={<><button className="ghost-btn"><Download size={16} /> 导出数据</button><button className="primary-btn"><FileText size={16} /> 生成日报</button></>}
-      />
-      <FilterBar />
-      <div className="grid grid-3 admin-metrics" style={{ margin: "18px 0" }}>
+      <section className="admin-dashboard-hero">
+        <PageHeader
+          eyebrow="智慧文旅运营平台"
+          title="运营看板"
+          subtitle="客流、咨询、转化、订单、投诉、商户表现和活动效果实时联动"
+          actions={<><button className="ghost-btn"><Download size={16} /> 导出数据</button><button className="primary-btn"><FileText size={16} /> 生成日报</button></>}
+        />
+        <div className="admin-control-row">
+          <FilterBar dense />
+          <div className="ops-clock">
+            <span>今日运营窗口</span>
+            <strong>06:00 - 23:00</strong>
+            <StatusTag tone="green">数据延迟 &lt; 45s</StatusTag>
+          </div>
+        </div>
+      </section>
+      <div className="grid admin-kpi-grid admin-metrics">
         {metrics.kpis.map((metric) => <MetricCard key={metric.label} metric={metric} />)}
       </div>
-      <div className="grid grid-3 admin-chart-grid">
+      <div className="admin-chart-grid">
         <ChartCard title="景区客流热力分布" action={<StatusTag tone="green">实时</StatusTag>}>
           <MapPanel compact scenic />
         </ChartCard>
-        <ChartCard title="实时客流趋势" action={<div className="filters">{["line", "area", "bar"].map((type) => <button key={type} className={chartType === type ? "primary-btn" : "ghost-btn"} onClick={() => setChartType(type as typeof chartType)}>{type}</button>)}</div>}>
+        <ChartCard title="实时客流趋势" action={
+          <div className="chart-type-switch" aria-label="切换客流趋势图表类型">
+            {(["line", "area", "bar"] as const).map((type) => (
+              <button key={type} className={chartType === type ? "active" : ""} onClick={() => setChartType(type)}>
+                {type}
+              </button>
+            ))}
+          </div>
+        }>
           <TrafficChart type={chartType} />
         </ChartCard>
         <ChartCard title="预约到游览转化漏斗" action={<StatusTag tone="blue">今日</StatusTag>}>
           <FunnelPanel />
         </ChartCard>
       </div>
-      <div className="grid grid-2" style={{ marginTop: 18 }}>
+      <div className="grid grid-2 admin-row">
         <Section title="咨询热点 TOP5">
           <ReviewTable columns={["咨询主题", "咨询量", "占比", "较昨日"]} rows={metrics.hotspots} />
         </Section>
@@ -134,19 +151,19 @@ export function DashboardPage() {
           ))}
         </Section>
       </div>
-      <div className="grid grid-2" style={{ marginTop: 18 }}>
+      <div className="grid grid-2 admin-row">
         <Section title="商户经营排行 TOP5">
           <ReviewTable columns={["商户名称", "交易额", "订单量", "好评率"]} rows={[
-            ["光明顶酒店", "128,635", "1,246", "98.35%"],
-            ["云上餐厅", "96,542", "1,102", "96.12%"],
-            ["北海咖啡厅", "72,318", "876", "97.45%"],
-            ["玉屏候车站", "68,947", "654", "95.21%"]
+            ["武昌城市酒店", "128,635", "1,246", "98.35%"],
+            ["肥肥虾庄江汉路店", "96,542", "1,102", "96.12%"],
+            ["江汉关咖啡厅", "72,318", "876", "97.45%"],
+            ["黄鹤楼游客中心", "68,947", "654", "95.21%"]
           ]} />
         </Section>
         <Section title="运营任务工单">
           <ReviewTable columns={["工单编号", "工单类型", "工单标题", "紧急程度"]} rows={[
             ["WO202606020001", "客诉处理", "游客反馈排队时间过长", "高"],
-            ["WO202606020002", "设备维护", "南大门闸机故障", "中"],
+            ["WO202606020002", "设备维护", "黄鹤楼西门闸机故障", "中"],
             ["WO202606020003", "内容审核", "活动页面信息更新审核", "低"],
             ["WO202606020004", "商户协助", "商户咨询分账周期问题", "低"]
           ]} action="处理" />
@@ -266,10 +283,10 @@ export function KnowledgePage() {
       <div className="grid grid-4">
         {metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}
       </div>
-      <div className="wide-split" style={{ gridTemplateColumns: "minmax(0,1fr) 380px", marginTop: 18 }}>
+      <div className="wide-split knowledge-layout">
         <main className="grid">
           <FilterBar dense />
-          <Section title="知识条目">
+          <Section title="知识条目" className="knowledge-table-section">
             {notice ? <p className="muted">{notice}</p> : null}
             <ReviewTable
               columns={knowledgeColumns}
@@ -282,14 +299,32 @@ export function KnowledgePage() {
             />
           </Section>
         </main>
-        <Section title="编辑 FAQ" action={<Settings2 size={18} />}>
-          <div className="grid">
-            <label>问题标题</label><input className="field" value="黄山景区门票多少钱？" readOnly />
-            <label>分类</label><select className="field"><option>门票政策</option></select>
-            <label>答案内容</label><textarea className="field" value={"黄山风景区门票价格如下：\n旺季（3月1日-11月30日）：190元/人\n淡季（12月1日-次年2月28日）：150元/人"} readOnly />
-            <label>多语言状态</label>
-            <div className="filters"><StatusTag tone="green">简体中文 已完成</StatusTag><StatusTag tone="green">English 已完成</StatusTag><StatusTag tone="orange">日本語 待翻译</StatusTag></div>
-            <button className="primary-btn" onClick={() => setNotice("FAQ 更新已发布。")}>发布更新</button>
+        <Section title="编辑 FAQ" className="faq-editor-panel" action={<Settings2 size={18} />}>
+          <div className="faq-editor-form">
+            <label className="faq-field">
+              <span>问题标题</span>
+              <input className="field" value="黄鹤楼演示票务多少钱？" readOnly />
+            </label>
+            <label className="faq-field">
+              <span>分类</span>
+              <select className="field"><option>门票政策</option></select>
+            </label>
+            <label className="faq-field">
+              <span>答案内容</span>
+              <textarea className="field" rows={6} value={"当前系统仅提供黄鹤楼 sandbox 票务演示：\n成人票候选：40元/人\n学生/儿童票候选：20元/人\n真实票价、库存和支付以官方渠道为准。"} readOnly />
+            </label>
+            <div className="faq-locale-block">
+              <div className="faq-locale-head">
+                <span>多语言状态</span>
+                <small>3 个语种</small>
+              </div>
+              <div className="faq-locale-tags">
+                <StatusTag tone="green">简体中文 已完成</StatusTag>
+                <StatusTag tone="green">English 已完成</StatusTag>
+                <StatusTag tone="orange">日本語 待翻译</StatusTag>
+              </div>
+            </div>
+            <button className="primary-btn" onClick={() => setNotice("FAQ 更新已发布。")}><Save size={17} />发布更新</button>
           </div>
         </Section>
       </div>
@@ -309,7 +344,7 @@ export function MerchantPage() {
   ];
   return (
     <>
-      <PageHeader title="商户工作台" subtitle={`下午好，云谷客栈。当前营业状态：${openForBusiness ? "营业中" : "暂停营业"}`} actions={<><button className="ghost-btn"><Eye size={16} /> 店铺预览</button><button className="ghost-btn"><QrIcon /> 扫码核销</button><button className="primary-btn" onClick={() => setOpenForBusiness((value) => !value)}>{openForBusiness ? "暂停营业" : "恢复营业"}</button></>} />
+      <PageHeader title="商户工作台" subtitle={`下午好，武昌城市酒店。当前营业状态：${openForBusiness ? "营业中" : "暂停营业"}`} actions={<><button className="ghost-btn"><Eye size={16} /> 店铺预览</button><button className="ghost-btn"><QrIcon /> 扫码核销</button><button className="primary-btn" onClick={() => setOpenForBusiness((value) => !value)}>{openForBusiness ? "暂停营业" : "恢复营业"}</button></>} />
       <div className="grid grid-5">
         {metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}
       </div>
@@ -319,10 +354,10 @@ export function MerchantPage() {
         </ChartCard>
         <Section title="今日订单" action={<button className="subtle-link">查看更多</button>}>
           <ReviewTable columns={["时间", "商品", "游客", "金额", "状态"]} rows={[
-            ["15:25", "云谷客栈·家庭房1间", "张**", "￥680", "待核销"],
-            ["14:48", "云谷客栈·山景大床房1间", "李**", "￥580", "已核销"],
-            ["14:03", "云谷客栈·双床房1间", "王**", "￥480", "已核销"],
-            ["13:37", "黄山门票+云谷客栈套餐", "陈**", "￥899", "待核销"]
+            ["15:25", "武昌城市酒店·家庭房1间", "张**", "￥680", "待核销"],
+            ["14:48", "武昌城市酒店·江景大床房1间", "李**", "￥580", "已核销"],
+            ["14:03", "武昌城市酒店·双床房1间", "王**", "￥480", "已核销"],
+            ["13:37", "黄鹤楼演示票+武昌城市酒店套餐", "陈**", "￥899", "待核销"]
           ]} action="核销" />
         </Section>
         <Section title="库存同步">
@@ -384,7 +419,7 @@ export function CampaignsPage() {
       <div className="grid grid-2" style={{ marginTop: 18 }}>
         <ChartCard title="活动转化趋势"><TrafficChart type="bar" /></ChartCard>
         <Section title="近期上线日程">
-          {["06-03 晚美乡村周末游 待上线", "06-05 端午民俗文化节 待上线", "06-09 亲子研学季 待上线"].map((item) => <p key={item}><CalendarDays size={16} color="var(--blue)" /> {item}</p>)}
+          {["06-03 江滩夜游周末线 待上线", "06-05 端午民俗文化节 待上线", "06-09 亲子研学季 待上线"].map((item) => <p key={item}><CalendarDays size={16} color="var(--blue)" /> {item}</p>)}
         </Section>
       </div>
     </>
@@ -455,20 +490,37 @@ export function ReviewPage() {
             <ChartCard title="审核趋势（7日）"><TrafficChart type="line" /></ChartCard>
           </div>
         </main>
-        <Section title="审核详情" action={<button className="ghost-btn">收起</button>}>
-          <div className="grid">
-            <div className="spot-card compact">
+        <Section title="审核详情" className="audit-detail-panel" action={<button className="ghost-btn">收起</button>}>
+          <div className="audit-detail-body">
+            <div className="audit-summary-card">
               <img src={spotImages.food} alt="审核材料" />
-              <div><StatusTag tone="orange">待审核</StatusTag><h3>{selected[0]}</h3><p className="muted">提交人：{selected[1]} · 类型：{selected[2]}</p></div>
+              <div className="audit-summary-main">
+                <div className="audit-status-row">
+                  <StatusTag tone={selected[4] === "已通过" ? "green" : selected[4] === "已驳回" ? "red" : "orange"}>{selected[4]}</StatusTag>
+                  <span>{selected[2]}</span>
+                </div>
+                <h3>{selected[0]}</h3>
+                <div className="audit-meta-grid">
+                  <span><b>提交人</b>{selected[1]}</span>
+                  <span><b>提交时间</b>{selected[5]}</span>
+                </div>
+              </div>
             </div>
-            <p><StatusTag tone="orange">风险提示</StatusTag> {selected[3]}</p>
-            <p>提交时间：{selected[5]}</p>
-            {notice ? <p className="muted">{notice}</p> : null}
-            <label>审核结果</label>
-            <select className="field"><option>请选择审核结果</option><option>通过</option><option>驳回</option><option>转人工复核</option></select>
-            <label>审核备注</label>
-            <textarea className="field" placeholder="请填写审核备注" value={remark} onChange={(event) => setRemark(event.target.value)} />
-            <div className="filters"><button className="ghost-btn" onClick={() => setRemark("")}>取消</button><button className="ghost-btn" style={{ color: "var(--red)" }} onClick={() => applyReview("已驳回")}><Trash2 size={15} /> 驳回</button><button className="primary-btn" onClick={() => applyReview("已通过")}>通过</button></div>
+            <div className="audit-risk-card">
+              <AlertTriangle size={18} />
+              <div>
+                <strong>风险提示</strong>
+                <p>{selected[3]}</p>
+              </div>
+            </div>
+            {notice ? <p className="audit-notice">{notice}</p> : null}
+            <div className="audit-form-grid">
+              <label>审核结果</label>
+              <select className="field"><option>请选择审核结果</option><option>通过</option><option>驳回</option><option>转人工复核</option></select>
+              <label>审核备注</label>
+              <textarea className="field" placeholder="请填写审核备注" value={remark} onChange={(event) => setRemark(event.target.value)} />
+            </div>
+            <div className="audit-action-row"><button className="ghost-btn" onClick={() => setRemark("")}>取消</button><button className="ghost-btn danger" onClick={() => applyReview("已驳回")}><Trash2 size={15} /> 驳回</button><button className="primary-btn" onClick={() => applyReview("已通过")}>通过</button></div>
           </div>
         </Section>
       </div>

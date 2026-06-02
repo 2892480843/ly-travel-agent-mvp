@@ -3,32 +3,32 @@ import type { City, Poi } from "../src/types";
 import { createMapProvider } from "./mapProvider";
 
 const cities: City[] = [
-  { id: "hangzhou", name: "杭州", officialName: "杭州市", pinyin: "hangzhou", adcode: "330100", level: "city" }
+  { id: "wuhan", name: "武汉", officialName: "武汉市", pinyin: "wuhan", adcode: "420100", level: "prefecture-city" }
 ];
 
 const pois: Poi[] = [
   {
-    id: "local-west-lake",
-    name: "西湖",
-    cityId: "hangzhou",
+    id: "wuhan-b001b0i4k0",
+    name: "黄鹤楼",
+    cityId: "wuhan",
     category: "景点",
     tags: ["景点", "少排队"],
-    lng: 120.148872,
-    lat: 30.245185,
+    lng: 114.302409,
+    lat: 30.544404,
     coordinateSystem: "GCJ-02",
-    address: "杭州市西湖区",
+    address: "武汉市武昌区蛇山西山坡特1号",
     rating: 4.9
   },
   {
-    id: "local-leifeng",
-    name: "雷峰塔",
-    cityId: "hangzhou",
+    id: "local-jianghan",
+    name: "江汉关博物馆",
+    cityId: "wuhan",
     category: "历史遗迹",
     tags: ["景点", "历史"],
-    lng: 120.148234,
-    lat: 30.233501,
+    lng: 114.292416,
+    lat: 30.57909,
     coordinateSystem: "GCJ-02",
-    address: "南山路15号",
+    address: "沿江大道95号",
     rating: 4.7
   }
 ];
@@ -37,14 +37,14 @@ describe("mapProvider", () => {
   it("returns deterministic fallback when AMap key is missing", async () => {
     const provider = createMapProvider({ pois, cities }, { provider: "amap", apiKey: "" });
 
-    const result = await provider.searchPois({ cityId: "hangzhou", keyword: "西湖", limit: 2 });
+    const result = await provider.searchPois({ cityId: "wuhan", keyword: "黄鹤楼", limit: 2 });
     const route = await provider.route({ mode: "walking" });
 
     expect(result.provider).toBe("amap");
     expect(result.coordinateSystem).toBe("GCJ-02");
     expect(result.fallback).toBe(true);
     expect(result.failureReason).toContain("MAP_API_KEY");
-    expect(result.items[0].name).toBe("西湖");
+    expect(result.items[0].name).toBe("黄鹤楼");
     expect(route.fallback).toBe(true);
     expect(route.points.length).toBeGreaterThanOrEqual(2);
   });
@@ -56,22 +56,22 @@ describe("mapProvider", () => {
       pois: [
         {
           id: "B0FFF",
-          name: "西湖音乐喷泉",
+          name: "黄鹤楼",
           type: "风景名胜;公园广场",
           typecode: "110000",
-          address: "湖滨",
-          location: "120.160000,30.250000",
-          pname: "浙江省",
-          cityname: "杭州市",
-          adname: "上城区",
-          adcode: "330102",
+          address: "蛇山西山坡特1号",
+          location: "114.302409,30.544404",
+          pname: "湖北省",
+          cityname: "武汉市",
+          adname: "武昌区",
+          adcode: "420106",
           biz_ext: { rating: "4.8" }
         }
       ]
     }), { status: 200 }));
     const provider = createMapProvider({ pois, cities }, { provider: "amap", apiKey: "test-key", fetchImpl });
 
-    const result = await provider.searchPois({ cityId: "hangzhou", keyword: "西湖", limit: 1 });
+    const result = await provider.searchPois({ cityId: "wuhan", keyword: "黄鹤楼", limit: 1 });
     const fetchCalls = fetchImpl.mock.calls;
 
     expect(fetchImpl).toHaveBeenCalledOnce();
@@ -79,9 +79,9 @@ describe("mapProvider", () => {
     expect(result.fallback).toBe(false);
     expect(result.provider).toBe("amap");
     expect(result.items[0]).toMatchObject({
-      name: "西湖音乐喷泉",
-      lng: 120.16,
-      lat: 30.25,
+      name: "黄鹤楼",
+      lng: 114.302409,
+      lat: 30.544404,
       coordinateSystem: "GCJ-02",
       source: { provider: "amap", amapId: "B0FFF" }
     });
@@ -95,10 +95,10 @@ describe("mapProvider", () => {
     }), { status: 200 }));
     const provider = createMapProvider({ pois, cities }, { provider: "amap", apiKey: "bad-key", fetchImpl });
 
-    const result = await provider.geocode({ keyword: "西湖", cityId: "hangzhou" });
+    const result = await provider.geocode({ keyword: "黄鹤楼", cityId: "wuhan" });
 
     expect(result.fallback).toBe(true);
-    expect(result.point).toMatchObject({ lng: 120.148872, lat: 30.245185 });
+    expect(result.point).toMatchObject({ lng: 114.302409, lat: 30.544404 });
     expect(result.failureReason).toContain("AMap error");
     expect(result.failureReason).toContain("INVALID_USER_KEY");
   });

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { hashPassword } from "./security";
+import { DEFAULT_TICKET_DEMO_POI_ID } from "./config/city";
 
 let db: DatabaseSync | undefined;
 
@@ -45,9 +46,10 @@ export function seedDatabase() {
     ["visitor", "游客小陈", "visitor"],
     ["operator", "张运营", "operator"],
     ["reviewer", "王审核", "reviewer"],
-    ["merchant", "云谷商户", "merchant"],
+    ["merchant", "武昌商户", "merchant"],
     ["admin", "系统管理员", "admin"]
   ].forEach(([id, name, role]) => insertUser.run(id, name, role, passwordHash, now, now));
+  database.prepare("UPDATE users SET name = ?, updated_at = ? WHERE id = ?").run("武昌商户", now, "merchant");
 
   database.prepare(`
     INSERT OR REPLACE INTO poi_cache_metadata
@@ -56,25 +58,44 @@ export function seedDatabase() {
   `).run(now);
 
   const insertMerchant = database.prepare(`
-    INSERT OR IGNORE INTO merchants
+    INSERT INTO merchants
       (id, name, category, status, inventory_status, rating, order_count, review_status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      category = excluded.category,
+      status = excluded.status,
+      inventory_status = excluded.inventory_status,
+      rating = excluded.rating,
+      order_count = excluded.order_count,
+      review_status = excluded.review_status,
+      updated_at = excluded.updated_at
   `);
+  database.prepare("DELETE FROM merchants WHERE id IN ('m-yungu', 'm-leifeng', 'm-xihu-boat')").run();
   [
-    ["m-yungu", "云谷客栈", "住宿", "营业中", "已同步", "4.8", 128, "已通过"],
-    ["m-leifeng", "雷峰塔景区票务", "门票", "营业中", "已同步", "4.7", 5842, "已通过"],
-    ["m-xihu-boat", "西湖游船", "交通", "营业中", "待同步", "4.6", 936, "待审核"]
+    ["m-wuchang-hotel", "武昌城市酒店", "住宿", "营业中", "已同步", "4.8", 128, "已通过"],
+    ["m-yellow-crane-ticket", "黄鹤楼演示票务", "门票", "营业中", "已同步", "4.7", 5842, "已通过"],
+    ["m-jianghan-tour", "江汉关夜游服务", "交通", "营业中", "待同步", "4.6", 936, "待审核"]
   ].forEach((merchant) => insertMerchant.run(...merchant, now, now));
 
   const insertReview = database.prepare(`
-    INSERT OR IGNORE INTO review_records
+    INSERT INTO review_records
       (id, subject_name, submitter, type, risk_note, status, submitted_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      subject_name = excluded.subject_name,
+      submitter = excluded.submitter,
+      type = excluded.type,
+      risk_note = excluded.risk_note,
+      status = excluded.status,
+      submitted_at = excluded.submitted_at,
+      updated_at = excluded.updated_at
   `);
+  database.prepare("DELETE FROM review_records WHERE id IN ('rv-merchant-yungu', 'rv-content-leifeng', 'rv-campaign-night')").run();
   [
-    ["rv-merchant-yungu", "云谷客栈入驻", "云谷客栈", "商户入驻", "资质材料需复核", "待审核", "2026-06-02 10:18"],
-    ["rv-content-leifeng", "雷峰塔活动页", "张运营", "内容发布", "票价文案需以官方为准", "待审核", "2026-06-02 09:42"],
-    ["rv-campaign-night", "西湖夜游专题", "李运营", "活动专题", "营销权益待确认", "审核中", "2026-06-01 18:20"]
+    ["rv-merchant-wuchang", "武昌城市酒店入驻", "武昌城市酒店", "商户入驻", "资质材料需复核", "待审核", "2026-06-02 10:18"],
+    ["rv-content-yellow-crane", "黄鹤楼演示票务活动页", "张运营", "内容发布", "需标注 sandbox 非真实库存/支付", "待审核", "2026-06-02 09:42"],
+    ["rv-campaign-riverfront", "江滩夜游专题", "李运营", "活动专题", "营销权益待确认", "审核中", "2026-06-01 18:20"]
   ].forEach((review) => insertReview.run(...review, now));
 
   seedTickets(database, now);
@@ -99,10 +120,21 @@ export function closeDb() {
 }
 
 function seedTickets(database: DatabaseSync, now: string) {
-  const poiId = "ticket-leifeng-demo";
+  const legacyPoiId = "ticket-leifeng-demo";
+  const poiId = DEFAULT_TICKET_DEMO_POI_ID;
+  database.prepare("UPDATE ticket_products SET poi_id = ?, updated_at = ? WHERE poi_id = ?").run(poiId, now, legacyPoiId);
+  database.prepare("UPDATE ticket_slots SET poi_id = ?, updated_at = ? WHERE poi_id = ?").run(poiId, now, legacyPoiId);
+
   const insertProduct = database.prepare(`
-    INSERT OR IGNORE INTO ticket_products (id, poi_id, name, description, price, status, created_at, updated_at)
+    INSERT INTO ticket_products (id, poi_id, name, description, price, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      poi_id = excluded.poi_id,
+      name = excluded.name,
+      description = excluded.description,
+      price = excluded.price,
+      status = excluded.status,
+      updated_at = excluded.updated_at
   `);
   [
     ["adult", "成人票", "18-60周岁游客", 40, "available"],
@@ -115,8 +147,14 @@ function seedTickets(database: DatabaseSync, now: string) {
   });
 
   const insertSlot = database.prepare(`
-    INSERT OR IGNORE INTO ticket_slots (id, poi_id, start_time, end_time, status, created_at, updated_at)
+    INSERT INTO ticket_slots (id, poi_id, start_time, end_time, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      poi_id = excluded.poi_id,
+      start_time = excluded.start_time,
+      end_time = excluded.end_time,
+      status = excluded.status,
+      updated_at = excluded.updated_at
   `);
   [
     ["08-10", "08:00", "10:00", "available"],

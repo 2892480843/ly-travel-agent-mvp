@@ -1,5 +1,6 @@
 import { kpis } from "../data/mockData";
 import type { AdminMetrics, AiResponse, City, MapPoint, Order, PaymentRecord, Poi, PoiSearchParams, RouteMode, RouteResult, TicketLock, TicketProduct, TicketSlot } from "../types";
+import { DEFAULT_CITY_ID, DEFAULT_TICKET_DEMO_POI_ID } from "../config/city";
 import { getCities, getFeaturedPois, getPoiById, searchPois } from "./poiService";
 import { getDemoTicketOptions, getDemoTicketSlots } from "./ticketService";
 
@@ -50,7 +51,7 @@ export async function fetchPoi(id: string): Promise<Poi | undefined> {
   try {
     return await request<Poi>(`/api/pois/${encodeURIComponent(id)}`);
   } catch {
-    return getPoiById(id) ?? getFeaturedPois("hangzhou", 1)[0];
+    return getPoiById(id) ?? getFeaturedPois(DEFAULT_CITY_ID, 1)[0];
   }
 }
 
@@ -62,7 +63,7 @@ export async function fetchCities(): Promise<City[]> {
   }
 }
 
-export async function fetchTicketOptions(poiId = "hangzhou-b023b02842", visitDate?: string): Promise<{ products: TicketProduct[]; slots: TicketSlot[] }> {
+export async function fetchTicketOptions(poiId = DEFAULT_TICKET_DEMO_POI_ID, visitDate?: string): Promise<{ products: TicketProduct[]; slots: TicketSlot[] }> {
   try {
     const query = new URLSearchParams({ poiId });
     if (visitDate) query.set("visitDate", visitDate);
@@ -131,7 +132,7 @@ export async function simulateSandboxPayment(paymentId: string, status: "paid" |
   });
 }
 
-export async function fetchRoute(payload: { origin?: MapPoint; destination?: MapPoint; waypoints?: MapPoint[]; mode?: RouteMode; preferences?: string[] }): Promise<RouteResult> {
+export async function fetchRoute(payload: { origin?: MapPoint; destination?: MapPoint; waypoints?: MapPoint[]; mode?: RouteMode; preferences?: string[]; cityId?: string }): Promise<RouteResult> {
   return await request<RouteResult>("/api/maps/route", {
     method: "POST",
     body: JSON.stringify(payload)
@@ -152,9 +153,9 @@ export async function fetchAdminMetrics(): Promise<AdminMetrics> {
     return {
       kpis,
       alerts: [
-        { title: "拥堵预警", desc: "西湖核心区预计 10:00-13:00 进入高峰", level: "高" },
-        { title: "库存预警", desc: "雷峰塔上午票余量低于演示阈值", level: "中" },
-        { title: "设备提醒", desc: "南门闸机 3 号通道离线", level: "低" }
+        { title: "拥堵预警", desc: "黄鹤楼与江汉路周边预计 10:00-13:00 进入高峰", level: "高" },
+        { title: "库存预警", desc: "黄鹤楼上午 sandbox 票务余量低于演示阈值", level: "中" },
+        { title: "设备提醒", desc: "司门口入口闸机 3 号通道离线", level: "低" }
       ],
       hotspots: [
         ["门票预约", "5,842", "24.21%", "+12.35%"],

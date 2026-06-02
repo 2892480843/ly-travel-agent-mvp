@@ -30,13 +30,13 @@ describe("repositories sandbox payment and ticket flow", () => {
   });
 
   it("keeps sandbox lock to order to payment flow idempotent for duplicate webhook events", () => {
-    const options = getTicketOptions("ticket-leifeng-demo", "2026-06-06");
+    const options = getTicketOptions("ticket-yellow-crane-tower-demo", "2026-06-06");
     const product = options.products[0]!;
     const slot = options.slots[0]!;
     const lock = lockTickets({ productId: product.id, slotId: slot.id, visitDate: "2026-06-06", quantity: 1 }, visitor);
     const order = createOrder({
-      title: `雷峰塔 ${product.name} x1`,
-      poiId: "ticket-leifeng-demo",
+      title: `黄鹤楼 ${product.name} x1`,
+      poiId: "ticket-yellow-crane-tower-demo",
       ticketId: product.id,
       ticketName: product.name,
       slotId: slot.id,

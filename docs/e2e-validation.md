@@ -5,8 +5,8 @@
 | 步骤 | 验收方式 | 预期 |
 |---|---|---|
 | 游客登录 | `POST /api/auth/login` | 返回 `authenticated=true` 与 visitor 用户 |
-| 查询 POI | `GET /api/pois?cityId=hangzhou` | 返回杭州真实 POI |
-| 查询库存 | `GET /api/tickets/options?poiId=ticket-leifeng-demo&visitDate=2026-06-06` | 返回票种与时段库存 |
+| 查询 POI | `GET /api/pois?cityId=wuhan` | 返回武汉真实 POI |
+| 查询库存 | `GET /api/tickets/options?poiId=ticket-yellow-crane-tower-demo&visitDate=2026-06-06` | 返回黄鹤楼 sandbox 票种与时段库存候选 |
 | 锁票 | `POST /api/tickets/lock` | 返回 active lock 和过期时间 |
 | 创建订单 | `POST /api/orders` | 返回 `pending_payment` 订单 |
 | 创建支付 | `POST /api/payments/create` | 返回 sandbox pending 支付 |
@@ -37,4 +37,5 @@ npm run smoke:api
 
 - sandbox auth 不是生产级身份认证，只用于服务端权限闭环演示。
 - sandbox payment 不产生真实扣款。
+- 黄鹤楼票务只使用 sandbox/demo 数据，不代表真实官方库存、出票或支付。
 - 地图真实 provider 尚未绑定具体厂商，当前返回 deterministic fallback。
