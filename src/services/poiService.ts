@@ -6,6 +6,9 @@ const fallbackImage = "https://images.unsplash.com/photo-1500530855697-b586d89ba
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
+export const recommendationFilters = ["全部推荐", "适合带娃", "少排队", "夜游", "Citywalk", "美食"] as const;
+export type RecommendationFilter = (typeof recommendationFilters)[number];
+
 export function searchPois(params: PoiSearchParams = {}, source: Poi[] = realPoiPreview): Poi[] {
   const keyword = params.keyword ? normalize(params.keyword) : "";
   const tags = params.tags?.map(normalize) ?? [];
@@ -40,6 +43,12 @@ export function getPoiCategories(source: Poi[] = realPoiPreview) {
   return Array.from(new Set(source.map((poi) => poi.category)));
 }
 
+export function filterRecommendedPois(pois: Poi[], filter: RecommendationFilter): Poi[] {
+  return pois
+    .filter((poi) => matchesRecommendationFilter(poi, filter))
+    .sort((left, right) => recommendationRank(right, filter) - recommendationRank(left, filter));
+}
+
 export function poiToScenicSpot(poi: Poi): ScenicSpot {
   const crowdOptions: Array<ScenicSpot["crowd"]> = ["舒适", "较少", "适中"];
   const crowd = crowdOptions[Math.abs(hashText(poi.id)) % crowdOptions.length];
@@ -68,6 +77,33 @@ export function statusForStock(status: "available" | "low" | "soldOut" | "verify
 function buildReason(poi: Poi, crowd: ScenicSpot["crowd"]) {
   const source = poi.source?.provider === "amap" ? "高德真实 POI" : "本地真实数据子集";
   return `${source}命中，评分 ${poi.rating ?? "暂无"}，当前模拟客流为${crowd}。${poi.openingHours ? "已保留可信开放时间。" : "开放时间以官方公告为准。"}`;
+}
+
+function matchesRecommendationFilter(poi: Poi, filter: RecommendationFilter) {
+  if (filter === "全部推荐") return true;
+  const text = normalize([poi.name, poi.category, poi.address, poi.openingHours, poi.suitableFor, poi.description, ...poi.tags].filter(Boolean).join(" "));
+
+  if (filter === "美食") return poi.category === "美食" || poi.tags.some((tag) => tag.includes("美食") || tag.includes("餐饮"));
+  if (filter === "适合带娃") return poi.category === "亲子游" || /亲子|家庭|学生|动物园|博物馆/.test(text);
+  if (filter === "夜游") return poi.category === "夜生活" || /夜|夜市|17:30|18:|19:|20:|21:|22:|23:|24:|01:|02:/.test(text);
+  if (filter === "Citywalk") return /citywalk|江滩|江汉关|步行街|古镇|古城|公园|沿江|夜市/.test(text);
+  if (filter === "少排队") return ["较少", "舒适"].includes(poiToScenicSpot(poi).crowd);
+  return true;
+}
+
+function recommendationRank(poi: Poi, filter: RecommendationFilter) {
+  const rating = poi.rating ?? 0;
+  if (filter === "少排队") {
+    const crowd = poiToScenicSpot(poi).crowd;
+    const crowdScore = crowd === "较少" ? 3 : crowd === "舒适" ? 2 : 1;
+    return crowdScore * 10 + rating;
+  }
+  if (filter === "适合带娃" && poi.category === "亲子游") return rating + 5;
+  if (filter === "美食" && poi.category === "美食") return rating + 5;
+  if (filter === "夜游" && poi.category === "夜生活") return rating + 5;
+  if (filter === "Citywalk" && ["公园自然", "历史遗迹", "夜生活"].includes(poi.category)) return rating + 5;
+  if (filter === "Citywalk" && poi.tags.some((tag) => tag.includes("江滩") || tag.includes("公园"))) return rating + 4;
+  return rating;
 }
 
 function hashText(value: string) {

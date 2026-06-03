@@ -26,11 +26,13 @@ npm run build:server
 npm run dev:server
 ```
 
-另开一个终端启动前端，并在 `.env` 中配置：
+另开一个终端启动前端。`.env` 中可以显式配置：
 
 ```bash
 VITE_API_BASE_URL=http://localhost:8787
 ```
+
+也可以留空，Vite 开发服务会把同源 `/api` 请求代理到 `PORT` 指定的后端，默认是 `http://localhost:8787`。生产部署时可继续使用同源 `/api`，或通过 `VITE_API_BASE_URL` 指向独立 API 域名。
 
 AI 助手现在优先调用服务端 `/api/agent/chat`。前端不再需要、也不应配置模型 API Key；未启动后端时会自动回到浏览器本地 deterministic fallback。
 

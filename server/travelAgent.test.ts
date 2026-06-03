@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { City, Poi, TicketProduct, TicketSlot } from "../src/types";
+import type { MapProvider } from "./mapProvider";
 import { createMapProvider } from "./mapProvider";
 import { runTravelAgent } from "./travelAgent";
 
@@ -55,6 +56,34 @@ const slots: TicketSlot[] = [
 ];
 
 describe("travelAgent", () => {
+  it("clarifies pure greetings without defaulting to Yellow Crane Tower tools", async () => {
+    const mapProvider = {
+      searchPois: vi.fn(),
+      route: vi.fn(),
+      geocode: vi.fn(),
+      reverseGeocode: vi.fn(),
+      weather: vi.fn()
+    } as unknown as MapProvider;
+    const getTicketOptions = vi.fn(() => ({ products, slots }));
+
+    const response = await runTravelAgent("你好", {
+      mapProvider,
+      getTicketOptions
+    });
+
+    expect(response.text).toContain("武汉文旅助手");
+    expect(response.text).not.toContain("方案1");
+    expect(response.text).not.toContain("黄鹤楼");
+    expect(response.cards).toEqual([]);
+    expect(response.toolCalls.every((tool) => tool.status === "skipped")).toBe(true);
+    expect(mapProvider.searchPois).not.toHaveBeenCalled();
+    expect(mapProvider.route).not.toHaveBeenCalled();
+    expect(mapProvider.geocode).not.toHaveBeenCalled();
+    expect(mapProvider.reverseGeocode).not.toHaveBeenCalled();
+    expect(mapProvider.weather).not.toHaveBeenCalled();
+    expect(getTicketOptions).not.toHaveBeenCalled();
+  });
+
   it("returns POI cards for the Yellow Crane Tower one-day quick question", async () => {
     const response = await runTravelAgent("黄鹤楼一日游，带老人，少排队", {
       mapProvider: createMapProvider({ pois, cities }, { provider: "amap", apiKey: "" }),

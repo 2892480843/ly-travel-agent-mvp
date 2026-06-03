@@ -114,7 +114,7 @@ function checkEnvironment() {
   if (env.VITE_API_BASE_URL) {
     add("frontend API base", "pass", "VITE_API_BASE_URL is configured.");
   } else {
-    add("frontend API base", "warn", "VITE_API_BASE_URL is empty; frontend will use local fallback paths.");
+    add("frontend API base", "warn", "VITE_API_BASE_URL is empty; frontend will use same-origin /api paths and the Vite dev proxy.");
   }
 }
 

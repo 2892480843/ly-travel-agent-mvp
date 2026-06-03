@@ -18,6 +18,23 @@ export function saveOrder(order: Order) {
   return next;
 }
 
+export function saveOrders(orders: Order[]) {
+  const next = mergeOrders(orders);
+  window.localStorage.setItem(storageKey, JSON.stringify(next));
+  return next;
+}
+
+export function mergeOrders(...groups: Order[][]) {
+  const byId = new Map<string, Order>();
+  groups.flat().forEach((order) => {
+    const existing = byId.get(order.id);
+    if (!existing || orderTimestamp(order) >= orderTimestamp(existing)) {
+      byId.set(order.id, order);
+    }
+  });
+  return Array.from(byId.values()).sort((a, b) => orderTimestamp(b) - orderTimestamp(a));
+}
+
 export function updateOrderStatus(orderId: string, status: OrderStatus) {
   const orders = readOrders();
   const next = orders.map((order) => order.id === orderId ? {
@@ -34,6 +51,12 @@ export function getLatestOrder(status?: OrderStatus) {
   return readOrders().find((order) => !status || order.status === status);
 }
 
+export function pickLatestUsableOrder(orders: Order[]) {
+  return orders.find((order) => order.status === "paid" || order.status === "ready_to_visit")
+    ?? orders.find((order) => order.status === "pending_payment")
+    ?? orders[0];
+}
+
 export function orderStatusLabel(status: OrderStatus) {
   const labels: Record<OrderStatus, string> = {
     pending_payment: "待支付",
@@ -47,4 +70,8 @@ export function orderStatusLabel(status: OrderStatus) {
     refunded: "已退款"
   };
   return labels[status];
+}
+
+function orderTimestamp(order: Order) {
+  return new Date(order.updatedAt || order.createdAt).getTime() || 0;
 }

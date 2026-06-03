@@ -5,7 +5,9 @@ import { routes } from "../../data/mockData";
 import { BRAND_NAME, BRAND_NAV_TAGLINE } from "../../config/brand";
 import { DEFAULT_TICKET_ROUTE } from "../../config/city";
 import { demoUsers, fetchCurrentAuth, getCurrentUser, loginAsRole, roleLabel } from "../../services/authService";
-import type { DemoUser, Role } from "../../types";
+import { apiUrl } from "../../services/apiClient";
+import { triggerOperation, type OperationEventDetail } from "../../services/operationService";
+import type { DemoUser, OperationScope, Role } from "../../types";
 
 const topPaths = ["/", "/assistant", "/map", "/plan", DEFAULT_TICKET_ROUTE, "/recommend", "/packages", "/admin/dashboard"];
 const adminGroups = [
@@ -131,8 +133,10 @@ function AdminTopBar() {
         <input aria-label="运营台全局搜索" placeholder="搜索商户、订单、知识库、工单..." />
       </label>
       <div className="nav-actions">
-        <button className="nav-icon-btn" aria-label="运营告警"><Bell size={19} /></button>
-        <span className="badge-dot">18</span>
+        <button className="nav-icon-btn notification-btn" aria-label="运营告警，18 条待处理">
+          <Bell size={19} />
+          <span className="badge-dot" aria-hidden="true">18</span>
+        </button>
         <span className="nav-meta"><HelpCircle size={19} /> 帮助中心</span>
       </div>
     </header>
@@ -142,6 +146,8 @@ function AdminTopBar() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const isAdmin = pathname.startsWith("/admin") || pathname === "/merchant";
+  useAutoOperationFallback(pathname);
+
   if (isAdmin) {
     return (
       <div className="admin-shell">
@@ -150,6 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <AdminTopBar />
           {children}
         </main>
+        <OperationToast />
       </div>
     );
   }
@@ -157,6 +164,114 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app">
       <TopNav />
       <main className="page">{children}</main>
+      <OperationToast />
     </div>
   );
+}
+
+function OperationToast() {
+  const [notice, setNotice] = useState<OperationEventDetail | undefined>();
+
+  useEffect(() => {
+    let timer: number | undefined;
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent<OperationEventDetail>).detail;
+      setNotice(detail);
+      window.clearTimeout(timer);
+      if (detail.status !== "pending") {
+        timer = window.setTimeout(() => setNotice(undefined), 3600);
+      }
+    };
+    window.addEventListener("ly:operation-result", listener);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("ly:operation-result", listener);
+    };
+  }, []);
+
+  if (!notice) return null;
+
+  return (
+    <div className={`operation-toast ${notice.status}`} role="status" aria-live="polite">
+      <span>{notice.message}</span>
+      {notice.result?.downloadUrl ? <a href={apiUrl(notice.result.downloadUrl)} target="_blank" rel="noreferrer">下载</a> : null}
+    </div>
+  );
+}
+
+function useAutoOperationFallback(pathname: string) {
+  useEffect(() => {
+    const listener = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : undefined;
+      const button = target?.closest("button");
+      if (!button || button.disabled || button.closest(".operation-toast")) return;
+      if (shouldIgnoreAutoOperation(button)) return;
+
+      const beforeUrl = window.location.href;
+      const beforeMarkup = button.outerHTML;
+      const label = getButtonLabel(button);
+      if (!label) return;
+
+      window.setTimeout(() => {
+        if (!button.isConnected) return;
+        const changed = window.location.href !== beforeUrl || button.outerHTML !== beforeMarkup;
+        if (changed || shouldIgnoreAutoOperation(button)) return;
+        triggerOperation({
+          scope: scopeForPath(pathname),
+          type: operationTypeForLabel(label),
+          label,
+          metadata: { pathname }
+        });
+      }, 180);
+    };
+    document.addEventListener("click", listener, true);
+    return () => document.removeEventListener("click", listener, true);
+  }, [pathname]);
+}
+
+function getButtonLabel(button: HTMLButtonElement) {
+  return (button.dataset.operationLabel || button.getAttribute("aria-label") || button.textContent || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 64);
+}
+
+function shouldIgnoreAutoOperation(button: HTMLButtonElement) {
+  const label = getButtonLabel(button);
+  if (!label || label === "-" || label === "+") return true;
+  if (label.includes("核销")) return true;
+  if (label === "立即生成行程" || label === "重新生成") return true;
+  if (button.closest(".chat-quick-row") || button.closest(".assistant-mode-grid")) return true;
+  if (button.closest(".map-mode-grid") || button.closest(".map-layer-list")) return true;
+  if (button.closest(".chart-type-switch") || button.closest(".workflow-canvas")) return true;
+  if (button.classList.contains("select-card") || button.classList.contains("mobile-menu")) return true;
+  return ["提交订单", "演示支付", "保存并发起审核", "通过", "驳回", "取消"].includes(label);
+}
+
+function scopeForPath(pathname: string): OperationScope {
+  if (pathname === "/merchant") return "merchant";
+  if (pathname.startsWith("/admin")) return "admin";
+  return "visitor";
+}
+
+function operationTypeForLabel(label: string) {
+  if (label.includes("导出")) return "export";
+  if (label.includes("日报") || label.includes("报告")) return "report";
+  if (label.includes("批量")) return "batch";
+  if (label.includes("重建")) return "knowledge.reindex";
+  if (label.includes("新建")) return "create.demo";
+  if (label.includes("发布配置")) return "workflow.publish";
+  if (label.includes("保存")) return "save";
+  if (label.includes("核销")) return "ticket.verify";
+  if (label.includes("收藏")) return "favorite.toggle";
+  if (label.includes("分享")) return "share";
+  if (label.includes("拍照") || label.includes("识别")) return "vision.demo";
+  if (label.includes("AR")) return "ar.demo";
+  if (label.includes("预览")) return "preview.demo";
+  if (label.includes("营销")) return "merchant.marketing";
+  if (label.includes("实时客流")) return "traffic.realtime";
+  if (label.includes("重排")) return "route.reorder";
+  if (label.includes("语音") || label.includes("讲解")) return "guide.audio";
+  if (label.includes("搜索") || label.includes("查询")) return "search";
+  return "ui.action";
 }

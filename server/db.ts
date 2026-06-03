@@ -371,8 +371,21 @@ CREATE TABLE IF NOT EXISTS map_provider_logs (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS operation_records (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  type TEXT NOT NULL,
+  label TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message TEXT NOT NULL,
+  actor_user_id TEXT REFERENCES users(id),
+  metadata_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_ticket_locks_status_expires ON ticket_locks(status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action, created_at);
+CREATE INDEX IF NOT EXISTS idx_operation_records_scope_type ON operation_records(scope, type, created_at);
 `;

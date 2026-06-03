@@ -5,11 +5,13 @@ import { createSession, deleteSession, getSessionUser, getUserByRole, type AuthU
 
 const cookieName = process.env.AUTH_COOKIE_NAME ?? "ly_session";
 
+const travelerPermissions = ["orders:own", "tickets:lock", "payments:own", "maps:read"];
+
 const permissions: Record<Role, string[]> = {
-  visitor: ["orders:own", "tickets:lock", "payments:own", "maps:read"],
-  merchant: ["orders:merchant", "tickets:verify", "maps:read"],
-  reviewer: ["reviews:write", "admin:read", "maps:read"],
-  operator: ["admin:read", "merchants:write", "reviews:write", "orders:read", "maps:read"],
+  visitor: travelerPermissions,
+  merchant: [...travelerPermissions, "orders:merchant", "tickets:verify"],
+  reviewer: [...travelerPermissions, "reviews:write", "admin:read"],
+  operator: [...travelerPermissions, "admin:read", "merchants:write", "reviews:write", "orders:read"],
   admin: ["*"]
 };
 

@@ -61,6 +61,14 @@ const route = await request("/api/maps/route", {
   method: "POST",
   body: JSON.stringify({ mode: "walking", preferences: ["少排队", "文化深读"] })
 });
+const agent = await request("/api/agent/chat", {
+  method: "POST",
+  body: JSON.stringify({ input: "黄鹤楼一日游，带老人，少排队" })
+});
+
+if (!agent.text || !Array.isArray(agent.cards) || !Array.isArray(agent.toolCalls) || typeof agent.confidence !== "number") {
+  throw new Error(`POST /api/agent/chat returned an invalid frontend contract: ${JSON.stringify(agent)}`);
+}
 
 console.log(JSON.stringify({
   ok: true,
@@ -70,5 +78,7 @@ console.log(JSON.stringify({
   paymentStatus: paidPayment.status,
   orderCount: orders.length,
   routeProvider: route.provider,
-  routeFallback: route.fallback
+  routeFallback: route.fallback,
+  agentCards: agent.cards.length,
+  agentToolCalls: agent.toolCalls.map((tool) => `${tool.name}:${tool.status}`)
 }, null, 2));

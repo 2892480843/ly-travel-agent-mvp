@@ -13,6 +13,7 @@
 | GET | `/api/pois/:id` | POI 详情 |
 | GET | `/api/cities` | 城市元数据 |
 | POST | `/api/itineraries/generate` | 基于真实 POI 候选生成演示行程 |
+| POST | `/api/agent/chat` | 服务端 Travel Agent，对接 POI、路线、天气和票务候选工具，返回前端聊天卡片 |
 
 ## 认证
 
@@ -74,6 +75,24 @@
 | POST | `/api/maps/reverse-geocode` | 逆地理编码 |
 
 当前 POI 坐标系为 `GCJ-02`。未配置真实地图 key 时返回 fallback 路线与失败原因。
+
+## Agent
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/agent/chat` | body: `{ input: string }`，返回 `AiResponse` |
+
+`AiResponse` 返回字段：
+
+| 字段 | 说明 |
+|---|---|
+| `text` | 中文建议正文 |
+| `cards` | 前端可渲染的推荐卡片，包含 `id/title/subtitle/image/actionLabel/href` |
+| `toolCalls` | 工具调用状态，包含 POI 搜索、路线规划、地理编码、逆地理编码、天气查询、票务候选 |
+| `confidence` | 0-1 置信度分数，用于前端展示 |
+| `sourceNote` | 来源和限制说明，明确 fallback、provider 与官方接口边界 |
+
+前端 `askTravelAssistant` 优先调用该接口；后端不可用时才回退到浏览器本地 deterministic fallback。模型配置只允许放在服务端 `AI_PROVIDER`、`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`，不得暴露到 `VITE_*`。
 
 ## 错误处理
 

@@ -1,7 +1,7 @@
 import type { AuthState, DemoUser, Role } from "../types";
 
 const storageKey = "ly.demo.user";
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const API_BASE = normalizeLocalApiBase(import.meta.env.VITE_API_BASE_URL ?? "");
 let memoryUser: DemoUser | undefined;
 
 export const demoUsers: DemoUser[] = [
@@ -11,6 +11,20 @@ export const demoUsers: DemoUser[] = [
   { id: "merchant", name: "武昌商户", role: "merchant" },
   { id: "admin", name: "系统管理员", role: "admin" }
 ];
+
+function normalizeLocalApiBase(base: string) {
+  if (!base || typeof window === "undefined") return base;
+  try {
+    const url = new URL(base);
+    if ((url.hostname === "localhost" || url.hostname === "127.0.0.1") && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+      url.hostname = window.location.hostname;
+      return url.toString().replace(/\/$/, "");
+    }
+  } catch {
+    return base;
+  }
+  return base;
+}
 
 export function getCurrentUser(): DemoUser {
   const queryUser = getQueryUser();
@@ -52,7 +66,10 @@ export async function fetchCurrentAuth(): Promise<AuthState> {
     if (!response.ok) throw new Error(`Auth request failed: ${response.status}`);
     const state = await response.json() as AuthState;
     const localUser = getCurrentUser();
-    const resolvedState = state.authenticated ? state : { ...state, user: localUser };
+    if (!state.authenticated) {
+      return await loginAsRole(localUser.role);
+    }
+    const resolvedState = { ...state, user: state.user ?? localUser };
     persistUser(resolvedState.user);
     return resolvedState;
   } catch {

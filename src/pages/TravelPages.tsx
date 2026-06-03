@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Accessibility,
   Baby,
   Bell,
   Camera,
+  CalendarCheck,
   CheckCircle2,
   Clock3,
   CreditCard,
@@ -33,6 +34,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import {
   AIChat,
+  type AIChatPromptRequest,
   Donut,
   MapPanel,
   OrderCard,
@@ -58,10 +60,11 @@ import {
   ticketSlots,
   timelineDays
 } from "../data/mockData";
-import type { Order, PaymentRecord, Poi, RouteResult, TicketLock, TicketProduct, TicketSlot } from "../types";
-import { createOrder, createPayment, fetchOrders, fetchPayment, fetchPoi, fetchPois, fetchRoute, fetchTicketOptions, lockTickets, simulateSandboxPayment } from "../services/apiClient";
-import { getLatestOrder, orderStatusLabel, readOrders, saveOrder, updateOrderStatus } from "../services/orderService";
-import { poiToScenicSpot, statusForStock } from "../services/poiService";
+import type { AiResponse, GeneratedItineraryResponse, Order, PaymentRecord, Poi, RouteResult, StatusTone, TicketLock, TicketProduct, TicketSlot, TimelineItem } from "../types";
+import { createOrder, createPayment, fetchOrders, fetchPayment, fetchPoi, fetchPois, fetchRoute, fetchTicketOptions, generateItinerary, lockTickets, simulateSandboxPayment } from "../services/apiClient";
+import { mergeOrders, orderStatusLabel, pickLatestUsableOrder, readOrders, saveOrder, saveOrders, updateOrderStatus } from "../services/orderService";
+import { triggerOperation } from "../services/operationService";
+import { filterRecommendedPois, poiToScenicSpot, recommendationFilters, type RecommendationFilter, statusForStock } from "../services/poiService";
 import { validateTicketSelection } from "../services/ticketService";
 import { BRAND_HERO_EYEBROW, BRAND_NAME } from "../config/brand";
 import {
@@ -83,6 +86,22 @@ const featureShortcuts = [
 
 const serviceItems = ["卫生间", "停车场", "母婴室", "无障碍", "充电宝", "游客中心", "行李寄存", "直通车"];
 
+const assistantHotQuestions = [
+  "武汉一日游最佳路线推荐",
+  "武汉必吃的本地美食",
+  "黄鹤楼门票演示怎么走？",
+  "江汉关博物馆怎么去？"
+] as const;
+
+const assistantQuickActions = [
+  { label: "行程规划", prompt: "请按少排队、适合老人和半日游帮我规划黄鹤楼路线" },
+  { label: "景点导览", prompt: "请推荐黄鹤楼、江汉关和湖北省博物馆的导览重点" },
+  { label: "票务预约", prompt: "帮我预约黄鹤楼上午票，带老人少排队" },
+  { label: "酒店预订", prompt: "黄鹤楼附近有哪些适合家庭出行的酒店和交通建议？" },
+  { label: "交通出行", prompt: "从黄鹤楼到江汉关博物馆怎么走，尽量少走路" },
+  { label: "美食推荐", prompt: "黄鹤楼附近有什么武汉本地美食，适合亲子和老人" }
+] as const;
+
 const mapLayerItems = [
   { label: "景点", icon: Landmark, tone: "green" },
   { label: "卫生间", icon: Toilet, tone: "blue" },
@@ -93,6 +112,104 @@ const mapLayerItems = [
 ] as const;
 
 type MapLayerLabel = (typeof mapLayerItems)[number]["label"];
+
+const immersiveStats = [
+  { label: "全景点位", value: "24", desc: "支持楼内外导览", icon: Navigation },
+  { label: "讲解内容", value: "68", desc: "故事、典故、建筑", icon: Headphones },
+  { label: "互动任务", value: "12", desc: "打卡与收藏成就", icon: Sparkles }
+] as const;
+
+const immersiveScenes = [
+  {
+    name: DEFAULT_TICKET_POI_NAME,
+    badge: "5A景区",
+    location: "武昌 · 蛇山",
+    duration: "45分钟",
+    crowd: "舒适",
+    image: spotImages.yellowCraneTower,
+    summary: "从楼顶观江、名楼故事到蛇山风景，适合首次到访游客快速建立江城文化脉络。",
+    tags: ["登楼观江", "历史典故", "AR导览"],
+    hotspots: [
+      { title: "楼顶观江", desc: "长江视野", x: 47, y: 18 },
+      { title: "名楼故事", desc: "历史典故", x: 22, y: 42 },
+      { title: "城市复原", desc: "重看江城变迁", x: 76, y: 36 },
+      { title: "蛇山风景", desc: "武汉城市地标", x: 36, y: 72 },
+      { title: "荆楚文化", desc: "楼阁历史与建筑", x: 70, y: 68 }
+    ],
+    route: ["楼顶观江", "名楼故事", "城市复原", "荆楚文化"],
+    stories: [
+      ["观江视野", "看长江、龟蛇锁大江与武昌城景的空间关系。"],
+      ["名楼源流", "从诗词、迁建与城市记忆理解黄鹤楼。"],
+      ["建筑细节", "识别飞檐、斗拱、彩绘与楼阁形制。"]
+    ]
+  },
+  {
+    name: "江汉关博物馆",
+    badge: "近代建筑",
+    location: "江汉 · 江滩",
+    duration: "35分钟",
+    crowd: "适中",
+    image: spotImages.jianghanGuan,
+    summary: "以开埠历史、钟楼建筑和江汉路城市漫游为主线，适合夜游前的轻量文化导览。",
+    tags: ["近代城市", "钟楼建筑", "Citywalk"],
+    hotspots: [
+      { title: "钟楼立面", desc: "建筑细节", x: 44, y: 24 },
+      { title: "开埠记忆", desc: "近代城市", x: 22, y: 48 },
+      { title: "江汉路口", desc: "Citywalk起点", x: 68, y: 42 },
+      { title: "江滩延展", desc: "夜游串联", x: 74, y: 72 }
+    ],
+    route: ["钟楼立面", "开埠记忆", "城市商业", "江滩延展"],
+    stories: [
+      ["汉口开埠", "理解近代商业、码头和城市格局形成。"],
+      ["钟楼建筑", "快速看懂立面比例与历史符号。"],
+      ["江滩夜游", "把博物馆、江汉路和江滩路线串起来。"]
+    ]
+  },
+  {
+    name: "湖北省博物馆",
+    badge: "文化深读",
+    location: "武昌 · 东湖",
+    duration: "60分钟",
+    crowd: "较少",
+    image: spotImages.hubeiMuseum,
+    summary: "围绕楚文化、青铜器与编钟体验组织讲解，适合亲子家庭和文化深度游用户。",
+    tags: ["楚文化", "馆藏重点", "亲子友好"],
+    hotspots: [
+      { title: "楚文化导览", desc: "核心展陈", x: 34, y: 26 },
+      { title: "编钟体验", desc: "声音互动", x: 62, y: 30 },
+      { title: "青铜器", desc: "器物故事", x: 25, y: 62 },
+      { title: "亲子路线", desc: "低强度参观", x: 70, y: 68 }
+    ],
+    route: ["楚文化导览", "编钟体验", "青铜器", "亲子路线"],
+    stories: [
+      ["曾侯乙编钟", "用声音互动理解礼乐文化。"],
+      ["楚文化线索", "把展厅内容串成可记忆的参观路径。"],
+      ["亲子任务", "用问答和打卡降低展陈理解门槛。"]
+    ]
+  },
+  {
+    name: "汉口江滩夜游",
+    badge: "夜游推荐",
+    location: "汉口 · 江滩",
+    duration: "40分钟",
+    crowd: "舒适",
+    image: spotImages.hankouRiverfront,
+    summary: "以灯光、江景、码头和城市天际线为体验核心，适合晚间散步、拍照和套餐联动。",
+    tags: ["夜景", "拍照", "商旅联动"],
+    hotspots: [
+      { title: "江滩灯光", desc: "夜景主视角", x: 38, y: 22 },
+      { title: "观江台", desc: "拍照点", x: 58, y: 36 },
+      { title: "码头记忆", desc: "城市故事", x: 24, y: 66 },
+      { title: "餐饮联动", desc: "夜宵推荐", x: 72, y: 70 }
+    ],
+    route: ["江滩灯光", "观江台", "码头记忆", "餐饮联动"],
+    stories: [
+      ["江景机位", "给出夜景拍摄角度和步行动线。"],
+      ["码头记忆", "补充汉口商业与江运故事。"],
+      ["夜游套餐", "联动餐饮、酒店和返程提醒。"]
+    ]
+  }
+] as const;
 
 const ticketUseSteps = [
   {
@@ -236,15 +353,15 @@ export function HomePage() {
               </Link>
             ))}
           </div>
-        </div>
-        <div className="hero-kpis">
-          {cityStats.map((item) => (
-            <div className="hero-kpi" key={item.label}>
-              <span className="muted">{item.label}</span>
-              <b>{item.value}</b>
-              <small>{item.hint}</small>
-            </div>
-          ))}
+          <div className="hero-kpis">
+            {cityStats.map((item) => (
+              <div className="hero-kpi" key={item.label}>
+                <span className="muted">{item.label}</span>
+                <b>{item.value}</b>
+                <small>{item.hint}</small>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
       <div className="container home-stack grid" style={{ gap: 18 }}>
@@ -300,6 +417,21 @@ export function HomePage() {
 
 export function AssistantPage() {
   const [mode, setMode] = useState("文本提问");
+  const [latestPrompt, setLatestPrompt] = useState("initial-demo");
+  const [latestAgent, setLatestAgent] = useState<AiResponse | undefined>();
+  const [promptRequest, setPromptRequest] = useState<AIChatPromptRequest | undefined>();
+  const handleAgentResult = useCallback((result: AiResponse, prompt: string) => {
+    setLatestPrompt(prompt);
+    setLatestAgent(result);
+  }, []);
+  const runAssistantPrompt = useCallback((prompt: string) => {
+    setLatestPrompt(prompt);
+    setPromptRequest({ id: Date.now(), text: prompt, autoSubmit: true });
+    triggerOperation({ scope: "visitor", type: "assistant.quick_prompt", label: "快捷提问", metadata: { prompt } });
+  }, []);
+  const toolCalls = latestAgent?.toolCalls ?? [];
+  const latestCards = latestAgent?.cards ?? [];
+  const confidence = latestAgent ? `${(latestAgent.confidence * 100).toFixed(0)}%` : "待生成";
   return (
     <div className="container wide-split assistant-layout">
       <div style={{ gridColumn: "1 / -1" }}>
@@ -329,49 +461,76 @@ export function AssistantPage() {
         </Section>
       </aside>
       <main className="assistant-main">
-        <AIChat />
+        <AIChat
+          onResult={handleAgentResult}
+          promptRequest={promptRequest}
+          onPromptRequestConsumed={() => setPromptRequest(undefined)}
+        />
       </main>
       <aside className="grid assist-rail">
         <Section title="热门问题" className="rail-section" action={<button className="ghost-btn">换一换</button>}>
-          {["武汉一日游最佳路线推荐", "武汉必吃的本地美食", "黄鹤楼门票演示怎么走？", "江汉关博物馆怎么去？"].map((q) => <p key={q}>🔥 {q}</p>)}
+          {assistantHotQuestions.map((q) => (
+            <button className="ghost-btn rail-prompt-btn" key={q} onClick={() => runAssistantPrompt(q)}>
+              {q}
+            </button>
+          ))}
         </Section>
         <Section title="快捷操作" className="rail-section">
           <div className="assistant-action-grid">
-            {["行程规划", "景点导览", "票务预约", "酒店预订", "交通出行", "美食推荐"].map((item) => <button className="ghost-btn" key={item}>{item}</button>)}
+            {assistantQuickActions.map((item) => <button className="ghost-btn" key={item.label} onClick={() => runAssistantPrompt(item.prompt)}>{item.label}</button>)}
           </div>
         </Section>
-        <Section title="工具调用状态" className="rail-section">
+        <Section title="Agent 实时状态" className="rail-section">
           <div className="assistant-status-list">
-            {["POI知识库已命中", "票务库存接口正常", "地图拥堵数据已同步"].map((item, i) => (
-              <p key={item}><StatusTag tone={i === 1 ? "green" : "blue"}>{i === 1 ? "在线" : "完成"}</StatusTag> {item}</p>
-            ))}
+            <p><StatusTag tone={latestAgent ? "green" : "orange"}>{confidence}</StatusTag> 当前问题：{latestPrompt === "initial-demo" ? "演示初始消息" : latestPrompt}</p>
+            {toolCalls.length ? toolCalls.map((tool) => (
+              <p key={`${tool.name}-${tool.summary}`}>
+                <StatusTag tone={toneForToolStatus(tool.status)}>{tool.status === "success" ? "完成" : tool.status === "failed" ? "失败" : "跳过"}</StatusTag> {tool.name}：{tool.summary}
+              </p>
+            )) : <p className="muted">发送问题后会展示 POI、路线、天气和票务候选工具调用状态。</p>}
           </div>
+          {latestAgent?.sourceNote ? <p className="muted">{latestAgent.sourceNote}</p> : null}
         </Section>
+        {latestCards.length ? (
+          <Section title="可执行推荐" className="rail-section">
+            <div className="grid">
+              {latestCards.slice(0, 3).map((card) => (
+                <Link className="chat-result-card rail-result-card" key={card.id} to={card.href ?? "/plan"}>
+                  <span className="chat-result-copy">
+                    <strong>{card.title}</strong>
+                    <p className="muted">{card.subtitle}</p>
+                  </span>
+                  {card.actionLabel ? <span className="chat-result-action">{card.actionLabel}</span> : null}
+                </Link>
+              ))}
+            </div>
+          </Section>
+        ) : null}
       </aside>
     </div>
   );
 }
 
+function toneForToolStatus(status: "success" | "failed" | "skipped"): StatusTone {
+  if (status === "success") return "green";
+  if (status === "failed") return "red";
+  return "orange";
+}
+
 export function RecommendPage() {
-  const [filter, setFilter] = useState("全部推荐");
+  const [filter, setFilter] = useState<RecommendationFilter>("全部推荐");
   const [pois, setPois] = useState<Poi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const category = filter === "美食" ? "美食" : filter === "全部推荐" ? "全部" : undefined;
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    fetchPois({
-      cityId: DEFAULT_CITY_ID,
-      category,
-      tags: filter === "适合带娃" ? ["亲子"] : filter === "少排队" ? ["景点"] : filter === "夜游" ? ["夜生活"] : undefined,
-      limit: 10
-    })
+    fetchPois({ cityId: DEFAULT_CITY_ID, limit: 100 })
       .then((items) => {
         if (!alive) return;
         setPois(items);
-        setError(items.length ? "" : "没有找到匹配的真实 POI，请换个筛选条件。");
+        setError(items.length ? "" : "没有找到真实 POI，请稍后再试。");
       })
       .catch(() => {
         if (alive) setError("真实 POI 服务暂不可用，已保留演示推荐。");
@@ -382,9 +541,12 @@ export function RecommendPage() {
     return () => {
       alive = false;
     };
-  }, [category, filter]);
+  }, []);
 
-  const filtered = pois.length ? pois.map(poiToScenicSpot) : filter === "美食" ? foods : scenicSpots;
+  const filteredPois = useMemo(() => filterRecommendedPois(pois, filter).slice(0, 10), [filter, pois]);
+  const filtered = filteredPois.length ? filteredPois.map(poiToScenicSpot) : filter === "美食" ? foods : scenicSpots;
+  const hasFilteredPois = filteredPois.length > 0;
+  const filterHint = filter === "全部推荐" ? "全部真实 POI 按评分排序" : `已按「${filter}」重排推荐结果`;
   return (
     <div className="container split recommend-layout">
       <main className="grid">
@@ -394,13 +556,15 @@ export function RecommendPage() {
             <p className="muted">基于你的偏好与实时情境，为你筛选最合适的{DEFAULT_CITY_NAME}文旅体验</p>
           </div>
           <div className="filters">
-            {["全部推荐", "适合带娃", "少排队", "夜游", "Citywalk", "美食"].map((item) => (
+            {recommendationFilters.map((item) => (
               <button className={filter === item ? "primary-btn" : "ghost-btn"} onClick={() => setFilter(item)} key={item}>{item}</button>
             ))}
           </div>
         </div>
-        <Section title={`为你找到 ${loading ? "..." : filtered.length} 个推荐`} className="recommend-results-section" action={<StatusTag tone="blue">{pois.length ? "真实 POI + 演示情境" : "fallback/demo"}</StatusTag>}>
+        <Section title={`为你找到 ${loading ? "..." : filtered.length} 个推荐`} className="recommend-results-section" action={<StatusTag tone="blue">{hasFilteredPois ? "真实 POI + 演示情境" : "fallback/demo"}</StatusTag>}>
+          <p className="muted">{filterHint}</p>
           {error ? <p className="muted">{error}</p> : null}
+          {!loading && pois.length > 0 && !hasFilteredPois ? <p className="muted">当前筛选暂无真实 POI 命中，先展示演示推荐。</p> : null}
           <div className="recommend-results-grid">
             {filtered.map((item) => "crowd" in item ? <SpotCard key={item.name} spot={item} /> : (
               <article className="card spot-card" key={item.name}>
@@ -409,7 +573,7 @@ export function RecommendPage() {
                   <div className="spot-head"><h3>{item.name}</h3><span className="rating">★ {item.rating}</span></div>
                   <div className="filters tiny-gap">{item.tags.map((tag) => <StatusTag key={tag} tone="slate">{tag}</StatusTag>)}<StatusTag tone="orange">人均 ￥{item.price}</StatusTag></div>
                   <p className="reason">为什么推荐你：{item.reason}</p>
-                  <button className="primary-btn">立即预订</button>
+                  <Link className="primary-btn" to={DEFAULT_TICKET_ROUTE}>立即预订</Link>
                 </div>
               </article>
             ))}
@@ -509,54 +673,145 @@ export function RecommendPage() {
   );
 }
 
+function buildClientFallbackPlan(days: number, walking: string): GeneratedItineraryResponse {
+  const boundedDays = Math.min(5, Math.max(1, days));
+  const items = Array.from({ length: boundedDays }).flatMap((_, index) => {
+    const day = `Day ${index + 1}`;
+    const source = timelineDays[day] ?? timelineDays[`Day ${((index % 3) + 1)}`] ?? timelineDays["Day 1"];
+    return (source ?? []).map((item) => ({ ...item, day, note: "前端兜底行程" }));
+  });
+  const totalPerPerson = 1600 + boundedDays * 360 + (walking === "挑战" ? 120 : 0);
+  return {
+    cityId: DEFAULT_CITY_ID,
+    days: boundedDays,
+    nights: Math.max(boundedDays - 1, 0),
+    title: `${DEFAULT_CITY_NAME} ${boundedDays}日${Math.max(boundedDays - 1, 0)}晚 文化深度游`,
+    preferences: ["历史文化", "亲子游", walking],
+    summary: [`可步行比例 ${walking === "轻松" ? 72 : walking === "挑战" ? 58 : 64}%`, "热门点错峰 3 处", `亲子休息点 ${boundedDays + 2} 个`, "票务可预约 4 项"],
+    reasons: ["当前为前端兜底行程；点击立即生成行程后由服务端 Itinerary Agent 重新编排。", "兜底数据仅用于页面初始展示，不代表已完成 agent 生成。"],
+    constraints: [
+      { label: "出行天数", value: `${boundedDays}天`, status: "提醒", tone: "orange" },
+      { label: "预算", value: `约 ￥${totalPerPerson.toLocaleString()} / 人`, status: totalPerPerson <= 3000 ? "通过" : "提醒", tone: totalPerPerson <= 3000 ? "green" : "orange" },
+      { label: "同行", value: "2 位成人 · 1 位儿童", status: "通过", tone: "green" },
+      { label: "步行强度", value: walking, status: "通过", tone: "green" }
+    ],
+    budget: {
+      totalPerPerson,
+      days: boundedDays,
+      breakdown: [
+        { name: "住宿", value: 44, fill: "#6fa88a" },
+        { name: "门票", value: 24, fill: "#d8b96a" },
+        { name: "餐饮", value: 20, fill: "#c9975d" },
+        { name: "交通", value: 12, fill: "#7ba7c8" }
+      ]
+    },
+    items,
+    sourceNote: "前端兜底行程，等待服务端 Itinerary Agent 生成。",
+    toolCalls: [
+      { name: "Itinerary Agent", status: "skipped", summary: "尚未触发服务端生成" }
+    ]
+  };
+}
+
+function groupItineraryItems(items: GeneratedItineraryResponse["items"]) {
+  return items.reduce<Record<string, TimelineItem[]>>((groups, item) => {
+    const { day, poiId: _poiId, note: _note, ...timelineItem } = item;
+    groups[day] = [...(groups[day] ?? []), timelineItem];
+    return groups;
+  }, {});
+}
+
 export function PlanPage() {
   const [day, setDay] = useState("Day 1");
+  const [tripDays, setTripDays] = useState(3);
   const [walking, setWalking] = useState("适中");
+  const [generatedMessage, setGeneratedMessage] = useState("正在准备服务端 Itinerary Agent...");
+  const [plan, setPlan] = useState<GeneratedItineraryResponse>(() => buildClientFallbackPlan(3, "适中"));
+  const planDays = useMemo(() => groupItineraryItems(plan.items), [plan.items]);
+  const visibleDays = useMemo(() => Array.from({ length: tripDays }, (_, index) => `Day ${index + 1}`), [tripDays]);
+  const updateTripDays = (next: number) => {
+    const bounded = Math.min(5, Math.max(1, next));
+    setTripDays(bounded);
+    setPlan(buildClientFallbackPlan(bounded, walking));
+    setGeneratedMessage("出行天数已调整，请点击「立即生成行程」刷新服务端 Agent 方案。");
+    const currentDayNumber = Number(day.replace("Day ", ""));
+    if (currentDayNumber > bounded) {
+      setDay(`Day ${bounded}`);
+    }
+  };
+  const updateWalking = (next: string) => {
+    setWalking(next);
+    setPlan(buildClientFallbackPlan(tripDays, next));
+    setGeneratedMessage("步行强度已调整，请点击「立即生成行程」刷新服务端 Agent 方案。");
+  };
+  const generatePlan = async () => {
+    setGeneratedMessage("正在调用服务端 Itinerary Agent：POI 编排、路线、天气、票务候选...");
+    try {
+      const result = await generateItinerary({
+        cityId: DEFAULT_CITY_ID,
+        days: tripDays,
+        preferences: ["历史文化", "亲子游", walking]
+      });
+      setPlan(result);
+      setTripDays(result.days);
+      setDay("Day 1");
+      setGeneratedMessage(`Agent 已生成 ${result.days} 天 ${result.items.length} 个日程节点：${result.sourceNote}`);
+    } catch (error) {
+      setGeneratedMessage(error instanceof Error ? `服务端生成失败：${error.message}` : "服务端生成失败。");
+    }
+  };
+  useEffect(() => {
+    void generatePlan();
+    // 初次进入页面即拉取服务端 agent 方案；后续参数调整由用户点击按钮触发。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const activeTimeline = planDays[day] ?? planDays["Day 1"] ?? [];
   return (
     <div className="container wide-split plan-layout">
       <div style={{ gridColumn: "1 / -1" }}>
-        <PageHeader title={`${DEFAULT_CITY_NAME}三日游智能规划`} subtitle="结合天气、营业时间、交通时长、票务演示库存与同行偏好生成可执行行程" />
+        <PageHeader title={`${DEFAULT_CITY_NAME}${tripDays}日游智能规划`} subtitle="结合天气、营业时间、交通时长、票务演示库存与同行偏好生成可执行行程" />
       </div>
       <aside className="card card-pad planner-panel">
-        <div className="section-title"><h2>行程设置</h2><button className="subtle-link">清空</button></div>
+        <div className="section-title"><h2>行程设置</h2><button className="subtle-link" onClick={() => { setTripDays(3); setDay("Day 1"); setWalking("适中"); setGeneratedMessage("行程设置已重置。"); }}>清空</button></div>
         <div className="step-title"><span>1</span><strong>出行天数</strong></div>
-        <div className="filters"><button className="ghost-btn">-</button><button className="field">3 天</button><button className="ghost-btn">+</button></div>
+        <div className="filters"><button className="ghost-btn" onClick={() => updateTripDays(tripDays - 1)} disabled={tripDays <= 1}>-</button><button className="field">{tripDays} 天</button><button className="ghost-btn" onClick={() => updateTripDays(tripDays + 1)} disabled={tripDays >= 5}>+</button></div>
         <div className="step-title"><span>2</span><strong>预算（人均）</strong></div>
-        <div className="grid grid-2"><div className="field">￥2000</div><div className="field">￥3000</div></div>
+        <div className="grid grid-2 planner-value-grid"><div className="field planner-value-field">￥2000</div><div className="field planner-value-field">￥3000</div></div>
         <div className="step-title"><span>3</span><strong>同行人</strong></div>
-        <div className="field">2 位成人 · 1 位儿童</div>
+        <div className="field planner-value-field planner-people-field">2 位成人 · 1 位儿童</div>
         <div className="step-title"><span>4</span><strong>兴趣偏好</strong></div>
         <div className="filters">{["历史文化", "自然风光", "美食体验", "亲子游", "拍照打卡"].map((t) => <StatusTag key={t}>{t}</StatusTag>)}</div>
         <div className="step-title"><span>5</span><strong>步行强度</strong></div>
-        <div className="filters">{["轻松", "适中", "挑战"].map((item) => <button className={walking === item ? "primary-btn" : "ghost-btn"} onClick={() => setWalking(item)} key={item}>{item}</button>)}</div>
-        <button className="primary-btn" style={{ width: "100%", marginTop: 20 }}><Sparkles size={17} /> 立即生成行程</button>
+        <div className="filters">{["轻松", "适中", "挑战"].map((item) => <button className={walking === item ? "primary-btn" : "ghost-btn"} onClick={() => updateWalking(item)} key={item}>{item}</button>)}</div>
+        <button className="primary-btn" style={{ width: "100%", marginTop: 20 }} onClick={() => void generatePlan()}><Sparkles size={17} /> 立即生成行程</button>
+        {generatedMessage ? <p className="muted">{generatedMessage}</p> : null}
       </aside>
       <main className="grid">
         <Section
-          title={`${DEFAULT_CITY_NAME} 3日2晚 文化深度游`}
-          subtitle="行程由 AI 生成，可拖拽调整顺序，点击景点可换成同类型候选"
-          action={<div className="filters"><button className="ghost-btn">调整偏好</button><button className="ghost-btn"><RefreshCcw size={16} />重新生成</button></div>}
+          title={plan.title}
+          subtitle={`服务端 Agent 生成 · ${plan.sourceNote}`}
+          action={<div className="filters"><button className="ghost-btn" onClick={() => setGeneratedMessage("请在左侧调整出行天数或步行强度，然后重新生成。")}>调整偏好</button><button className="ghost-btn" onClick={() => void generatePlan()}><RefreshCcw size={16} />重新生成</button></div>}
         >
           <div className="planner-summary-strip">
-            {["可步行比例 64%", "热门点错峰 3 处", "亲子休息点 5 个", "票务可预约 4 项"].map((item) => <span key={item}>{item}</span>)}
+            {plan.summary.map((item) => <span key={item}>{item}</span>)}
           </div>
           <div className="filters" style={{ marginBottom: 14 }}>
-            {Object.keys(timelineDays).map((d) => <button key={d} onClick={() => setDay(d)} className={day === d ? "primary-btn" : "ghost-btn"}>{d}</button>)}
+            {visibleDays.map((d) => <button key={d} onClick={() => setDay(d)} className={day === d ? "primary-btn" : "ghost-btn"}>{d}</button>)}
             <StatusTag tone="green">20-28℃ 空气优</StatusTag>
           </div>
-          <Timeline items={timelineDays[day]} />
+          <Timeline items={activeTimeline} />
         </Section>
       </main>
       <aside className="grid">
         <Section title="推荐理由" className="decision-panel">
-          {["黄鹤楼、江汉关、湖北省博物馆三类核心体验一次玩到", "江城风光 + 人文历史 + 美食体验，节奏舒适", "错峰安排热门景点，优化游览顺序", "亲子友好，保留休息与室内替代点"].map((r) => <p key={r}><CheckCircle2 color="var(--green)" size={16} /> {r}</p>)}
+          {plan.reasons.map((reason) => <p key={reason}><CheckCircle2 color="var(--green)" size={16} /> {reason}</p>)}
         </Section>
         <Section title="约束条件已满足" className="decision-panel">
-          {["出行天数：3天", "预算：￥2000 - ￥3000", "同行：2成人1儿童", "语言：中文（简体）"].map((item) => <p key={item}><StatusTag tone="green">通过</StatusTag> {item}</p>)}
+          {plan.constraints.map((item) => <p key={`${item.label}-${item.value}`}><StatusTag tone={item.tone}>{item.status}</StatusTag> {item.label}：{item.value}</p>)}
         </Section>
         <Section title="预计费用（人均）" className="budget-panel">
-          <h2 style={{ color: "var(--green)", margin: 0 }}>￥2,680 <small>/3天</small></h2>
-          <Donut data={[{ name: "住宿", value: 47, fill: "#6fa88a" }, { name: "门票", value: 28, fill: "#d8b96a" }, { name: "餐饮", value: 16, fill: "#c9975d" }, { name: "交通", value: 9, fill: "#7ba7c8" }]} />
+          <h2 style={{ color: "var(--green)", margin: 0 }}>￥{plan.budget.totalPerPerson.toLocaleString()} <small>/{plan.budget.days}天</small></h2>
+          <Donut data={plan.budget.breakdown} />
           <Link className="primary-btn" to="/packages" style={{ width: "100%" }}>一键预订景点门票 + 酒店 + 交通</Link>
         </Section>
       </aside>
@@ -569,6 +824,7 @@ export function SpotDetailPage() {
   const [tab, setTab] = useState(tabs[0]);
   const [poi, setPoi] = useState<Poi | undefined>();
   const [nearby, setNearby] = useState<Poi[]>([]);
+  const [audioNotice, setAudioNotice] = useState("");
 
   useEffect(() => {
     fetchPoi(DEFAULT_TICKET_REAL_POI_ID).then(setPoi);
@@ -585,6 +841,10 @@ export function SpotDetailPage() {
     { label: "坐标系", value: poi?.coordinateSystem ?? "GCJ-02" },
     { label: "地址", value: poi?.address ?? "武汉市武昌区蛇山西山坡特1号", wide: true }
   ];
+  const startAudioGuide = (label: string) => {
+    setAudioNotice(`${label}已进入演示播放队列：当前为本地讲解文案与音频入口，不调用真实第三方语音服务。`);
+    triggerOperation({ scope: "visitor", type: "guide.audio", label, metadata: { poi: detail.name } });
+  };
   return (
     <div className="container grid spot-detail-page">
       <div className="split spot-detail-intro">
@@ -596,7 +856,7 @@ export function SpotDetailPage() {
             <div className="filters spot-detail-actions">
               <Link className="primary-btn" to="/plan">加入行程</Link>
               <Link className="primary-btn" to={DEFAULT_TICKET_ROUTE}>立即预约</Link>
-              <button className="ghost-btn"><Headphones size={16} />语音导览</button>
+              <button className="ghost-btn" onClick={() => startAudioGuide("语音导览")}><Headphones size={16} />语音导览</button>
             </div>
           </div>
         </section>
@@ -657,7 +917,8 @@ export function SpotDetailPage() {
           <div className="audio-topic-list">
             {["名楼故事", "长江武汉", "荆楚文化"].map((topic) => <span key={topic}>{topic}</span>)}
           </div>
-          <button className="ghost-btn"><Headphones size={16} />开始讲解</button>
+          <button className="ghost-btn" onClick={() => startAudioGuide("开始讲解")}><Headphones size={16} />开始讲解</button>
+          {audioNotice ? <p className="muted">{audioNotice}</p> : null}
         </Section>
       </div>
       <div className="split">
@@ -708,8 +969,10 @@ export function TicketBookingPage() {
     fetchTicketOptions(DEFAULT_TICKET_DEMO_POI_ID, date).then(({ products: nextProducts, slots: nextSlots }) => {
       setProducts(nextProducts);
       setSlots(nextSlots);
-      setTicket(nextProducts[0]);
-      setSlot(nextSlots[0]);
+      setTicket((current) => nextProducts.find((product) => product.id === current?.id) ?? nextProducts[0]);
+      setSlot((current) => nextSlots.find((item) => item.id === current?.id) ?? nextSlots[0]);
+      setLock(undefined);
+      setMessage("");
     });
   }, [date]);
 
@@ -899,26 +1162,65 @@ export function TicketDetailPage() {
   const [order, setOrder] = useState<Order | undefined>();
 
   useEffect(() => {
-    setOrder(getLatestOrder("paid") ?? getLatestOrder("ready_to_visit") ?? readOrders()[0]);
+    let alive = true;
+    const localOrders = readOrders();
+    setOrder(pickLatestUsableOrder(localOrders));
+    fetchOrders().then((remoteOrders) => {
+      if (!alive) return;
+      const merged = mergeOrders(remoteOrders, localOrders);
+      saveOrders(merged);
+      setOrder(pickLatestUsableOrder(merged));
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
+  const displayTitle = order?.title ?? `${DEFAULT_CITY_NAME}文旅演示票务 · ${DEFAULT_TICKET_POI_NAME}`;
+  const displayDate = order?.visitDate ?? "2026-06-06";
+  const displaySlot = order?.slotTime ?? "08:00-10:00";
+  const displayQuantity = order?.quantity ?? 2;
+  const reminderItems = [
+    ["天气", "26℃ 晴，空气优", "适合户外步行"],
+    ["交通", "地铁 5 号线司门口黄鹤楼站出", "步行约 12 分钟"],
+    ["核验", "请携带有效身份证件", "按预约时段入园"],
+    ["说明", "sandbox 演示票务", "真实规则以景区官方公告为准"]
+  ];
+  const relatedServices = [
+    ["江汉关夜游导览", "￥55起", "夜游路线"],
+    ["黄鹤楼登楼讲解", "￥38起", "语音导览"],
+    [`${DEFAULT_CITY_NAME}一日游精品路线`, "￥198起", "错峰行程"]
+  ];
+
   return (
-    <div className="container grid">
+    <div className="container grid ticket-detail-page">
       <PageHeader title="旅行票务详情" subtitle="电子凭证、订单进度、出行提醒、使用规则与退改说明集中查看" />
-      <div className="split">
+      <div className="split ticket-detail-layout">
       <main className="grid">
-        <Section title="已支付 · 待使用" subtitle="出行前请携带有效身份证件，按预约时段入园">
-          <div className="grid grid-2">
-            <div className="spot-card">
+        <Section title="已支付 · 待使用" subtitle="出行前请携带有效身份证件，按预约时段入园" className="ticket-credential-section">
+          <div className="ticket-credential-grid">
+            <div className="ticket-brief">
               <img src={order?.image ?? spotImages.yellowCraneTower} alt={DEFAULT_TICKET_POI_NAME} />
-              <div><h2>{order?.title ?? `${DEFAULT_CITY_NAME}文旅演示票务 · ${DEFAULT_TICKET_POI_NAME}`}</h2><p>预约日期：{order?.visitDate ?? "2026-06-06"}</p><p>入园时段：{order?.slotTime ?? "08:00-10:00"}</p><p>入口：黄鹤楼景区西门</p></div>
+              <div className="ticket-brief-copy">
+                <StatusTag tone="green">已支付</StatusTag>
+                <h2>{displayTitle}</h2>
+                <div className="ticket-brief-meta">
+                  <span><CalendarCheck size={15} />{displayDate}</span>
+                  <span><Clock3 size={15} />{displaySlot}</span>
+                  <span><MapPin size={15} />黄鹤楼景区西门</span>
+                </div>
+              </div>
+              <div className="ticket-brief-count">
+                <strong>{displayQuantity}</strong>
+                <span>张票</span>
+              </div>
             </div>
             <VoucherPreview
               title={`${DEFAULT_CITY_NAME}文旅演示票务 · ${DEFAULT_TICKET_POI_NAME}`}
               ticketName={order?.ticketName ?? "成人票"}
-              visitDate={order?.visitDate ?? "2026-06-06"}
-              slotTime={order?.slotTime ?? "08:00-10:00"}
-              quantity={order?.quantity ?? 2}
+              visitDate={displayDate}
+              slotTime={displaySlot}
+              quantity={displayQuantity}
               amount={order?.amount}
               gate="黄鹤楼景区西门"
               holderNames={order?.visitorInfo?.map((visitor) => visitor.name) ?? ["张小文", "李小明"]}
@@ -934,12 +1236,33 @@ export function TicketDetailPage() {
           {["使用规则：预约日期与时段内核销，凭二维码或身份证入园。", "退改说明：未使用可在入园前 23:59 申请退款。", "发票信息：支持电子发票，订单完成后可在线申请。"].map((item) => <Section key={item} title={item.split("：")[0]}><p>{item}</p></Section>)}
         </div>
       </main>
-      <aside className="grid">
-        <Section title="出行提醒">
-          {["今日天气 26℃ 晴，空气优", "地铁 5 号线司门口黄鹤楼站出，步行约 12 分钟", "当前为 sandbox 演示票务，真实入园规则以景区官方公告为准"].map((item) => <p key={item}><StatusTag tone="blue">提醒</StatusTag> {item}</p>)}
+      <aside className="grid ticket-detail-aside">
+        <Section title="出行提醒" className="travel-reminder-panel">
+          <div className="travel-reminder-list">
+            {reminderItems.map(([label, title, desc]) => (
+              <div className="travel-reminder-item" key={label}>
+                <StatusTag tone="blue">{label}</StatusTag>
+                <div>
+                  <strong>{title}</strong>
+                  <span>{desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </Section>
-        <Section title="推荐关联服务">
-          {["江汉关夜游导览 ￥55起", "黄鹤楼登楼讲解演示包 ￥38起", "武汉一日游精品路线 ￥198起"].map((item) => <p key={item}>{item}<button className="ghost-btn">预订</button></p>)}
+        <Section title="推荐关联服务" className="related-service-panel">
+          <div className="related-service-list">
+            {relatedServices.map(([title, price, tag]) => (
+              <div className="related-service-item" key={title}>
+                <div>
+                  <StatusTag tone="gold">{tag}</StatusTag>
+                  <strong>{title}</strong>
+                  <span>{price}</span>
+                </div>
+                <button className="ghost-btn">预订</button>
+              </div>
+            ))}
+          </div>
         </Section>
       </aside>
       </div>
@@ -953,16 +1276,55 @@ export function PayPage() {
   const [order, setOrder] = useState<Order | undefined>();
   const [payment, setPayment] = useState<PaymentRecord | undefined>();
   const [paymentMessage, setPaymentMessage] = useState("");
+  const fallbackOrder = useMemo<Order>(() => {
+    const now = new Date().toISOString();
+    return {
+      id: `DEMO${Date.now()}`,
+      title: orders[0].title,
+      status: "pending_payment",
+      amount: orders[0].amount,
+      visitDate: "2026-06-06",
+      slotTime: "08:00-10:00",
+      image: orders[0].image,
+      poiId: DEFAULT_TICKET_DEMO_POI_ID,
+      ticketId: "demo-ticket",
+      ticketName: "成人票",
+      slotId: "demo-slot",
+      quantity: 2,
+      paymentProvider: "mock",
+      visitorInfo: [
+        { name: "张小文", credentialType: "id-card", credentialNo: "330***********1234" },
+        { name: "李小明", credentialType: "id-card", credentialNo: "330***********5678" }
+      ],
+      createdAt: now,
+      updatedAt: now
+    };
+  }, []);
 
   useEffect(() => {
-    setOrder(getLatestOrder("pending_payment") ?? readOrders()[0]);
+    let alive = true;
+    const localOrders = readOrders();
+    setOrder(localOrders.find((item) => item.status === "pending_payment") ?? pickLatestUsableOrder(localOrders));
+    fetchOrders().then((remoteOrders) => {
+      if (!alive) return;
+      const merged = mergeOrders(remoteOrders, localOrders);
+      saveOrders(merged);
+      setOrder(merged.find((item) => item.status === "pending_payment") ?? pickLatestUsableOrder(merged));
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const pay = async () => {
-    if (!order) return;
+    const activeOrder = order ?? fallbackOrder;
+    if (!order) {
+      saveOrder(activeOrder);
+      setOrder(activeOrder);
+    }
     try {
       setPaymentMessage("正在创建服务端支付...");
-      const created = await createPayment(order.id);
+      const created = await createPayment(activeOrder.id);
       setPayment(created);
       if (created.provider !== "sandbox") {
         setPaymentMessage(`已创建 ${created.provider} 支付，请等待 provider 回调。`);
@@ -973,28 +1335,26 @@ export function PayPage() {
       const latestPayment = await fetchPayment(nextPayment.id);
       setPayment(latestPayment);
       const remoteOrders = await fetchOrders();
-      const latestOrder = remoteOrders.find((item) => item.id === order.id) ?? order;
+      const latestOrder = remoteOrders.find((item) => item.id === activeOrder.id) ?? activeOrder;
+      saveOrders(mergeOrders(remoteOrders, readOrders(), [latestOrder]));
       setOrder(latestOrder);
-      saveOrder(latestOrder);
       setPaid(latestPayment.status === "paid");
       setPaymentMessage(`服务端支付状态：${latestPayment.status}`);
     } catch (error) {
-      const next = updateOrderStatus(order.id, "paid");
+      const next = updateOrderStatus(activeOrder.id, "paid") ?? {
+        ...activeOrder,
+        status: "paid" as const,
+        voucherCode: activeOrder.voucherCode ?? `V${activeOrder.id.slice(-8)}`,
+        updatedAt: new Date().toISOString()
+      };
+      saveOrder(next);
       setOrder(next);
       setPaid(true);
       setPaymentMessage(error instanceof Error ? `服务端支付不可用，已切换本地演示 fallback：${error.message}` : "服务端支付不可用，已切换本地演示 fallback。");
     }
   };
 
-  const displayOrder = order ?? {
-    id: "demo",
-    title: orders[0].title,
-    status: "pending_payment",
-    amount: orders[0].amount,
-    visitDate: "2026-06-06",
-    slotTime: "08:00-10:00",
-    image: orders[0].image
-  };
+  const displayOrder = order ?? fallbackOrder;
   return (
     <div className="container split">
       <main className="card card-pad">
@@ -1037,6 +1397,7 @@ export function PayPage() {
 
 export function MePage() {
   const [tab, setTab] = useState("全部行程");
+  const [profileSection, setProfileSection] = useState("我的行程");
   const [storedOrders, setStoredOrders] = useState<Order[]>([]);
   const profileStats = [
     { value: "12", label: "收藏" },
@@ -1047,7 +1408,9 @@ export function MePage() {
 
   useEffect(() => {
     fetchOrders().then((remoteOrders) => {
-      setStoredOrders(remoteOrders.length ? remoteOrders : readOrders());
+      const merged = mergeOrders(remoteOrders, readOrders());
+      saveOrders(merged);
+      setStoredOrders(merged);
     });
   }, []);
 
@@ -1071,16 +1434,17 @@ export function MePage() {
           </div>
         </div>
         <nav className="profile-menu" aria-label="个人中心菜单">
-          {profileMenu.map((item) => <button className={item === "我的行程" ? "primary-btn" : "ghost-btn"} key={item}>{item}</button>)}
+          {profileMenu.map((item) => <button className={profileSection === item ? "primary-btn" : "ghost-btn"} onClick={() => setProfileSection(item)} key={item}>{item}</button>)}
         </nav>
       </aside>
       <main className="grid">
         <div className="dashboard-title">
-          <div><h1>我的行程</h1><p className="muted">轻松管理你的出行计划、订单状态、电子凭证与出行提醒</p></div>
+          <div><h1>{profileSection}</h1><p className="muted">轻松管理你的出行计划、订单状态、电子凭证与出行提醒</p></div>
           <button className="primary-btn"><Plus size={16} /> 新建行程</button>
         </div>
+        {profileSection !== "我的行程" ? <Section title={profileSection}><p className="muted">{profileSection}视图已打开，当前展示演示账户数据。</p></Section> : null}
         <div className="tab-strip">{["全部行程", "即将出行", "进行中", "已完成", "已取消"].map((item) => <button className={tab === item ? "primary-btn" : "ghost-btn"} onClick={() => setTab(item)} key={item}>{item}</button>)}</div>
-        <Section title="即将出行（2）">
+        <Section title={`即将出行（${Math.min(orderCards.length, 2)}）`}>
           {orderCards.slice(0, 2).map((order) => <OrderCard key={order.id} order={order} />)}
         </Section>
         <Section title="我的订单">
@@ -1199,46 +1563,177 @@ export function PackagesPage() {
 
 export function ImmersivePage() {
   const [scene, setScene] = useState(DEFAULT_TICKET_POI_NAME);
+  const [notice, setNotice] = useState("");
+  const activeScene = immersiveScenes.find((item) => item.name === scene) ?? immersiveScenes[0];
+  const runImmersiveAction = (label: string) => {
+    setNotice(`${label}状态已更新，当前保留在「${scene}」场景。`);
+    triggerOperation({ scope: "visitor", type: label.includes("AR") ? "ar.demo" : "immersive.demo", label, metadata: { scene } });
+  };
   return (
-    <div className="container wide-split">
-      <aside className="grid">
-        <Section title="选择场景">
-          {[DEFAULT_TICKET_POI_NAME, "江汉关博物馆", "湖北省博物馆", "汉口江滩夜游"].map((item, index) => (
-            <button key={item} className={scene === item ? "primary-btn" : "ghost-btn"} onClick={() => setScene(item)}>{index + 1}. {item}</button>
+    <div className="container immersive-page">
+      <section className="immersive-hero" style={{ "--hero-image": `url(${activeScene.image})` } as React.CSSProperties}>
+        <div className="immersive-hero-copy">
+          <span className="hero-eyebrow">AR / VR IMMERSIVE GUIDE</span>
+          <h1>沉浸式体验</h1>
+          <p>全景导览、历史场景复原、数字讲解与互动打卡统一管理，让游客先看懂、再会玩、最后能带走行程结果。</p>
+          <div className="filters">
+            {activeScene.tags.map((tag) => <StatusTag key={tag} tone="gold">{tag}</StatusTag>)}
+          </div>
+        </div>
+        <div className="immersive-hero-panel" aria-label="沉浸体验能力概览">
+          {immersiveStats.map(({ label, value, desc, icon: Icon }) => (
+            <div className="immersive-stat" key={label}>
+              <span><Icon size={18} /></span>
+              <strong>{value}</strong>
+              <p>{label}</p>
+              <small>{desc}</small>
+            </div>
           ))}
-        </Section>
-      </aside>
-      <main className="grid">
-        <div className="dashboard-title">
-          <div><h1>沉浸式体验</h1><p className="muted">AR/VR 全景导览、历史场景复原、数字讲解与互动打卡</p></div>
-          <div className="filters"><button className="ghost-btn"><Search size={16} /> 搜索故事</button><button className="ghost-btn">热门景点</button><button className="ghost-btn">夜游灯光秀</button></div>
         </div>
-        <div className="ar-stage">
-          {[
-            ["楼顶观江", "长江视野", 48, 18],
-            ["名楼故事", "历史典故", 18, 38],
-            ["城市复原", "重看江城变迁", 76, 35],
-            ["蛇山风景", "武汉城市地标", 36, 72],
-            ["荆楚文化", "楼阁历史与建筑", 70, 68]
-          ].map(([title, desc, x, y]) => <span className="ar-hotspot" key={title as string} style={{ left: `${x}%`, top: `${y}%` }}>{title}<small>{desc}</small></span>)}
-        </div>
-        <Section title="推荐体验场景 / 故事">
-          <div className="grid grid-5">
-            {scenicSpots.slice(0, 5).map((spot) => <SpotCard key={spot.name} spot={spot} compact />)}
+      </section>
+
+      <div className="immersive-layout">
+        <aside className="grid immersive-rail">
+          <Section title="选择场景" subtitle="按目的地切换全景脚本" className="immersive-scene-panel">
+            <div className="immersive-scene-list">
+              {immersiveScenes.map((item, index) => (
+                <button
+                  key={item.name}
+                  className={`immersive-scene-card ${scene === item.name ? "active" : ""}`}
+                  onClick={() => setScene(item.name)}
+                  type="button"
+                >
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{item.name}</strong>
+                  <small>{item.location} · {item.duration}</small>
+                </button>
+              ))}
+            </div>
+          </Section>
+          <Section title="体验状态" subtitle="当前导览服务状态" className="immersive-status-panel">
+            {[
+              ["全景资源", "已同步"],
+              ["语音讲解", "普通话 / EN"],
+              ["打卡任务", "12 个可用"],
+              ["行程联动", "可加入"]
+            ].map(([label, value], index) => (
+              <div className="immersive-status-row" key={label}>
+                <span><CheckCircle2 size={15} /></span>
+                <strong>{label}</strong>
+                <small>{value}</small>
+                <StatusTag tone={index === 1 ? "blue" : "green"}>{index === 1 ? "多语" : "正常"}</StatusTag>
+              </div>
+            ))}
+          </Section>
+        </aside>
+
+        <main className="immersive-main">
+          <div className="dashboard-title immersive-title">
+            <div>
+              <h1>{activeScene.name} · 全景导览台</h1>
+              <p className="muted">{activeScene.summary}</p>
+            </div>
+            <div className="filters">
+              <button className="ghost-btn" type="button"><Search size={16} />搜索故事</button>
+              <button className="ghost-btn" type="button">热门景点</button>
+              <button className="ghost-btn" type="button">夜游灯光秀</button>
+            </div>
           </div>
-        </Section>
-      </main>
-      <aside className="grid">
-        <Section title={scene}>
-          <StatusTag tone="blue">5A景区</StatusTag>
-          <p>{DEFAULT_TICKET_POI_NAME}位于武汉市武昌区蛇山，是江城代表性文化地标之一。</p>
-          <div className="timeline" style={{ paddingLeft: 24 }}>
-            {["楼顶观江", "名楼故事", "城市复原", "荆楚文化"].map((item, i) => <div className="timeline-item" key={item}><strong>{i + 1}</strong><div>{item}<button className="icon-btn" style={{ width: 34, height: 34 }}><Headphones size={15} /></button></div></div>)}
-          </div>
-          <Link className="primary-btn" to="/spot/yellow-crane-tower">进入全景</Link>
-          <div className="grid grid-2"><button className="ghost-btn">AR导览</button><button className="ghost-btn">加入行程</button><button className="ghost-btn">分享</button><button className="ghost-btn">收藏</button></div>
-        </Section>
-      </aside>
+
+          <section className="immersive-stage-card" aria-label={`${activeScene.name}全景导览`}>
+            <div className="immersive-stage-head">
+              <div>
+                <StatusTag tone="blue">{activeScene.badge}</StatusTag>
+                <StatusTag tone="green">当前客流{activeScene.crowd}</StatusTag>
+              </div>
+              <span><Clock3 size={15} /> 推荐体验 {activeScene.duration}</span>
+            </div>
+            <div className="ar-stage immersive-stage" style={{ "--stage-image": `url(${activeScene.image})` } as React.CSSProperties}>
+              {activeScene.hotspots.map((item) => (
+                <button
+                  className="ar-hotspot"
+                  key={item.title}
+                  onClick={() => runImmersiveAction(`${item.title}热点`)}
+                  style={{ left: `${item.x}%`, top: `${item.y}%` }}
+                  type="button"
+                >
+                  <span>{item.title}</span>
+                  <small>{item.desc}</small>
+                </button>
+              ))}
+              <div className="immersive-stage-overlay">
+                <div>
+                  <strong>{activeScene.name}</strong>
+                  <p>历史、建筑与路线节点已整理成分段导览。</p>
+                </div>
+                <button className="primary-btn" onClick={() => runImmersiveAction("开始沉浸导览")} type="button">
+                  <Headphones size={16} /> 开始导览
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <Section title="推荐体验场景 / 故事" subtitle="按当前场景生成可讲、可走、可收藏的内容卡片" className="immersive-story-section">
+            <div className="immersive-story-grid">
+              {activeScene.stories.map(([title, desc], index) => (
+                <article className="immersive-story-card" key={title}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <h3>{title}</h3>
+                  <p>{desc}</p>
+                  <button className="subtle-link" onClick={() => runImmersiveAction(`${title}故事`)} type="button">播放故事</button>
+                </article>
+              ))}
+            </div>
+          </Section>
+        </main>
+
+        <aside className="grid immersive-detail">
+          <Section
+            title={activeScene.name}
+            subtitle={activeScene.location}
+            className="immersive-detail-panel"
+            action={<StatusTag tone="blue">{activeScene.badge}</StatusTag>}
+          >
+            <p>{activeScene.summary}</p>
+            {notice ? <p className="immersive-notice">{notice}</p> : null}
+            <div className="immersive-facts">
+              <div><Star size={16} /><strong>4.8</strong><span>游客评分</span></div>
+              <div><Ticket size={16} /><strong>可预约</strong><span>票务联动</span></div>
+              <div><MapPin size={16} /><strong>{activeScene.duration}</strong><span>推荐时长</span></div>
+            </div>
+            <div className="immersive-route-list" aria-label={`${activeScene.name}导览节点`}>
+              {activeScene.route.map((item, i) => (
+                <div className="immersive-route-item" key={item}>
+                  <span>{i + 1}</span>
+                  <strong>{item}</strong>
+                  <button className="icon-btn" aria-label={`${item}语音讲解`} onClick={() => runImmersiveAction(`${item}语音讲解`)} type="button">
+                    <Headphones size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <Link className="primary-btn immersive-wide-action" to="/spot/yellow-crane-tower">
+              <Navigation size={16} /> 进入全景
+            </Link>
+            <div className="grid grid-2 immersive-action-grid">
+              {["AR导览", "加入行程", "分享", "收藏"].map((item) => (
+                <button className="ghost-btn" key={item} onClick={() => runImmersiveAction(item)} type="button">{item}</button>
+              ))}
+            </div>
+          </Section>
+          <Section title="周边联动" subtitle="导览完成后的下一步" className="immersive-link-panel">
+            {scenicSpots.slice(0, 3).map((spot) => (
+              <div className="immersive-link-row" key={spot.name}>
+                <img src={spot.image} alt={spot.name} />
+                <div>
+                  <strong>{spot.name}</strong>
+                  <small>{spot.duration} · {spot.crowd}</small>
+                </div>
+              </div>
+            ))}
+          </Section>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -1248,6 +1743,7 @@ export function MapPage() {
   const [activeLayers, setActiveLayers] = useState<Set<MapLayerLabel>>(() => new Set(mapLayerItems.map((item) => item.label)));
   const [pois, setPois] = useState<Poi[]>([]);
   const [route, setRoute] = useState<RouteResult | undefined>();
+  const [mapNotice, setMapNotice] = useState("");
 
   useEffect(() => {
     fetchPois({ cityId: DEFAULT_CITY_ID, category: "景点", limit: 5 }).then(setPois);
@@ -1259,10 +1755,7 @@ export function MapPage() {
   }, [mode]);
 
   const routePois = pois.length ? pois : [];
-  const routeStopNames = route?.waypointNames.length ? route.waypointNames : routePois.length ? routePois.map((poi) => poi.name) : ["黄鹤楼", "江汉关博物馆", "汉口江滩-观江台", "湖北省博物馆", "保成路夜市"];
   const routeSummary = route ? `约 ${(route.distanceMeters / 1000).toFixed(1)} 公里 · ${route.durationMinutes} 分钟 · ${route.provider}${route.fallback ? " fallback" : ""}` : "路线服务加载中";
-  const routeDistanceLabel = route ? `${(route.distanceMeters / 1000).toFixed(1)} 公里` : "计算中";
-  const routeDurationLabel = route ? `${route.durationMinutes} 分钟` : "计算中";
   const nearbySpots = routePois.length ? routePois.slice(1, 4).map(poiToScenicSpot) : scenicSpots.slice(1, 4);
   const toggleLayer = (label: MapLayerLabel) => {
     setActiveLayers((current) => {
@@ -1275,33 +1768,18 @@ export function MapPage() {
       return next;
     });
   };
+  const runMapAction = (label: string) => {
+    setMapNotice(label === "重排"
+      ? `已按「${mode}」重新计算演示路线，路线结果来自本地 API/fallback。`
+      : `${label}已打开演示结果：客流与语音讲解均为本地演示，不代表真实第三方能力。`);
+    triggerOperation({ scope: "visitor", type: label === "重排" ? "route.reorder" : label.includes("语音") ? "guide.audio" : "traffic.realtime", label, metadata: { mode } });
+  };
 
   return (
     <div className="map-layout map-fullscreen" aria-label="智能导览地图工作台">
+      <h1 className="sr-only">智能导览</h1>
       <MapPanel scenic pois={pois} route={route} />
       <div className="map-overlay-grid">
-        <section className="map-surface map-command-surface" aria-label="地图搜索">
-          <div className="map-command-heading">
-            <div>
-              <span className="eyebrow">Smart Guide</span>
-              <h1>智能导览</h1>
-              <p>AI 伴你游，畅玩每一步。</p>
-            </div>
-            <StatusTag tone="blue">实时路线</StatusTag>
-          </div>
-          <label className="search-pill compact-input map-search">
-            <Search size={18} />
-            <input aria-label="搜索景点、服务、设施" placeholder="搜索景点、服务、设施（如：黄鹤楼、卫生间、停车场）" />
-            <button className="icon-btn" type="button" aria-label="语音搜索"><Mic size={18} /></button>
-          </label>
-          <div className="map-command-metrics" aria-label="当前导览状态">
-            <span><Navigation size={14} />{routeDistanceLabel}</span>
-            <span><Clock3 size={14} />{routeDurationLabel}</span>
-            <span><MapPin size={14} />{routeStopNames.length} 个点位</span>
-            <span><Landmark size={14} />{activeLayers.size} 个图层</span>
-          </div>
-        </section>
-
         <aside className="map-surface map-control-panel" aria-label="路线与图层控制">
           <div className="map-panel-title">
             <div>
@@ -1338,7 +1816,8 @@ export function MapPage() {
           <div className="map-alert-card">
             <StatusTag tone="red">较拥挤 76%</StatusTag>
             <p>黄鹤楼核心区预计 10:00-13:00 进入高峰。</p>
-            <button className="ghost-btn">查看实时客流</button>
+            <button className="ghost-btn" onClick={() => runMapAction("查看实时客流")}>查看实时客流</button>
+            {mapNotice ? <p className="muted">{mapNotice}</p> : null}
           </div>
         </aside>
 
@@ -1364,7 +1843,7 @@ export function MapPage() {
           </div>
           <div className="scenic-callout-actions">
             <Link className="primary-btn" to={DEFAULT_TICKET_ROUTE}><Navigation size={17} />去这里</Link>
-            <button className="ghost-btn"><Headphones size={16} />语音讲解</button>
+            <button className="ghost-btn" onClick={() => runMapAction("语音讲解")}><Headphones size={16} />语音讲解</button>
           </div>
           <div className="map-nearby-list">
             <h3>附近推荐</h3>
@@ -1387,20 +1866,10 @@ export function MapPage() {
               <h2>推荐路线（{mode}）</h2>
               <span>{routeSummary}</span>
             </div>
-            <button className="ghost-btn"><RefreshCcw size={16} />重排</button>
+            <button className="ghost-btn" onClick={() => runMapAction("重排")}><RefreshCcw size={16} />重排</button>
           </div>
+          {mapNotice ? <p className="muted">{mapNotice}</p> : null}
           {route?.failureReason ? <p className="muted">{route.failureReason}</p> : null}
-          <ol className="route-stop-list map-route-strip">
-            {routeStopNames.map((item, index) => (
-              <li className="route-stop-card" key={`${item}-${index}`}>
-                <span className="route-stop-index">{index + 1}</span>
-                <div className="route-stop-content">
-                  <strong>{item}</strong>
-                  <span><Clock3 size={15} />预计停留 {20 + index * 5} 分钟</span>
-                </div>
-              </li>
-            ))}
-          </ol>
         </section>
       </div>
     </div>

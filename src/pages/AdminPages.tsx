@@ -45,58 +45,192 @@ import {
   spotImages,
   workflowNodes
 } from "../data/mockData";
-import type { MetricItem } from "../types";
-import { createMerchant, decideReview, fetchAdminMetrics, fetchMerchants, fetchReviews, syncMerchantInventory } from "../services/apiClient";
-import { nextPublishStatus, validateRequired } from "../services/adminService";
+import type { MetricItem, Order } from "../types";
+import { createMerchant, decideReview, fetchAdminMetrics, fetchMerchants, fetchOrders, fetchReviews, syncMerchantInventory, verifyTicketVoucher } from "../services/apiClient";
+import { describeAdminFilterScope, filterAdminRows, filterReviewRows, nextPublishStatus, validateRequired, type AdminFilterState } from "../services/adminService";
+import { triggerOperation } from "../services/operationService";
 
-const merchantColumns = ["商户名称", "类别", "营业状态", "库存同步", "评分", "近7日订单", "审核状态"];
+const merchantColumns = ["商户名称", "类别", "营业状态", "库存同步", "评分", "近7日订单", "审核状态", "标签"];
 const knowledgeColumns = ["问题标题", "分类", "来源", "更新时间", "状态", "命中次数"];
 const campaignColumns = ["专题名称", "标签", "状态", "PV", "UV", "CTR"];
 const reviewColumns = ["名称", "提交人", "类型", "风险提示", "审核状态", "提交时间"];
+const defaultFilterState: AdminFilterState = {
+  keyword: "",
+  scenic: "全部景区",
+  status: "全部状态",
+  date: "2026-06-02"
+};
+const dashboardFilterState: AdminFilterState = {
+  keyword: "",
+  scenic: "全部景区",
+  status: "全部状态"
+};
+const reviewStatusOptions = ["全部状态", "待审核", "审核中", "已通过", "已驳回"];
+const reviewScenicOptions = ["全部景区", "黄鹤楼", "湖北省博物馆", "江汉关博物馆", "武昌城市酒店"];
+const dashboardStatusOptions = ["全部状态", "已支付", "待出行", "已核销", "活跃锁票", "待审核", "审核中"];
+const defaultDashboardHotspots = [
+  ["门票预约", "5,842", "24.21%", "+12.35%"],
+  ["索道运营时间", "3,276", "13.57%", "+5.21%"],
+  ["停车场位置", "2,915", "12.07%", "+1.84%"],
+  ["天气查询", "2,104", "8.72%", "-3.12%"],
+  ["景点介绍", "1,876", "7.77%", "+2.05%"]
+];
+type ReviewListItem = {
+  id?: string;
+  row: string[];
+};
 
-function FilterBar({ dense = false }: { dense?: boolean }) {
+function sameReviewRow(left: string[], right: string[]) {
+  return left[0] === right[0] && left[5] === right[5];
+}
+
+function merchantRowKey(row: string[]) {
+  return row[0];
+}
+
+function reviewRowKey(row: string[]) {
+  return `${row[0]}-${row[5]}`;
+}
+
+function ensureMerchantTag(row: string[]) {
+  return row.length >= merchantColumns.length ? row : [...row, "未设置"];
+}
+
+function operationTime() {
+  return new Date().toISOString().replace("T", " ").slice(0, 16);
+}
+
+function normalizeHotspots(rows: string[][], kpiRows = kpis, scopeLabel = "") {
+  const normalizedRows = rows.slice(0, 5).map((row) => [row[0] ?? "-", row[1] ?? "-", row[2] ?? "-", row[3] ?? "-"]);
+  const existingNames = new Set(normalizedRows.map((row) => row[0]));
+  const paymentMetric = kpiRows.find((item) => item.label === "支付收入");
+  const supplementRows = [
+    paymentMetric ? ["支付收入", paymentMetric.value, "paid orders", paymentMetric.delta] : undefined,
+    scopeLabel ? ["筛选口径", scopeLabel.includes("全部关键词 / 全部景区 / 全部状态") ? "全量" : "已应用", "scope", scopeLabel] : undefined,
+    ...defaultDashboardHotspots
+  ].filter((row): row is string[] => Array.isArray(row));
+
+  for (const row of supplementRows) {
+    if (normalizedRows.length >= 5) break;
+    if (existingNames.has(row[0])) continue;
+    normalizedRows.push(row);
+    existingNames.add(row[0]);
+  }
+
+  return normalizedRows;
+}
+
+function FilterBar({
+  dense = false,
+  statusOptions = ["全部状态", "已发布", "待审核"],
+  scenicOptions = ["全部景区", "黄鹤楼", "湖北省博物馆", "江汉关博物馆"],
+  keywordPlaceholder = "请输入关键词",
+  scopeTitle,
+  scopeNote,
+  onQuery,
+  onReset
+}: {
+  dense?: boolean;
+  statusOptions?: string[];
+  scenicOptions?: string[];
+  keywordPlaceholder?: string;
+  scopeTitle?: string;
+  scopeNote?: string;
+  onQuery?: (filters: AdminFilterState) => void;
+  onReset?: () => void;
+}) {
+  const [keyword, setKeyword] = useState(defaultFilterState.keyword);
+  const [scenic, setScenic] = useState(defaultFilterState.scenic);
+  const [status, setStatus] = useState(defaultFilterState.status);
+  const [date, setDate] = useState(defaultFilterState.date ?? "");
+  const [notice, setNotice] = useState("");
+  const query = () => {
+    const filters = { keyword, scenic, status, date: dense ? undefined : date };
+    setNotice(`已按 ${describeAdminFilterScope(filters, { includeDate: !dense })} 查询。`);
+    onQuery?.(filters);
+  };
+  const reset = () => {
+    setKeyword(defaultFilterState.keyword);
+    setScenic(defaultFilterState.scenic);
+    setStatus(defaultFilterState.status);
+    setDate(defaultFilterState.date ?? "");
+    setNotice("筛选条件已重置。");
+    onReset?.();
+  };
   return (
     <div className={`card card-pad admin-filter ${dense ? "dense" : ""}`}>
+      {scopeTitle || scopeNote ? (
+        <div className="filter-scope-note">
+          {scopeTitle ? <strong>{scopeTitle}</strong> : null}
+          {scopeNote ? <span>{scopeNote}</span> : null}
+        </div>
+      ) : null}
       <div className="filters">
-        <input className="field" placeholder="请输入关键词" />
-        <select className="field"><option>全部景区</option><option>黄鹤楼</option><option>湖北省博物馆</option><option>江汉关博物馆</option></select>
-        <select className="field"><option>全部状态</option><option>已发布</option><option>待审核</option></select>
-        {!dense ? <input className="field" type="date" defaultValue="2026-06-02" /> : null}
-        <button className="primary-btn"><Filter size={16} /> 查询</button>
-        <button className="ghost-btn">重置</button>
+        <input className="field" placeholder={keywordPlaceholder} value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+        <select className="field" value={scenic} onChange={(event) => setScenic(event.target.value)}>
+          {scenicOptions.map((option) => <option key={option}>{option}</option>)}
+        </select>
+        <select className="field" value={status} onChange={(event) => setStatus(event.target.value)}>
+          {statusOptions.map((option) => <option key={option}>{option}</option>)}
+        </select>
+        {!dense ? <input className="field" type="date" value={date} onChange={(event) => setDate(event.target.value)} /> : null}
+        <button className="primary-btn" onClick={query}><Filter size={16} /> 查询</button>
+        <button className="ghost-btn" onClick={reset}>重置</button>
       </div>
+      {notice ? <p className="muted">{notice}</p> : null}
     </div>
   );
 }
 
 export function DashboardPage() {
   const [chartType, setChartType] = useState<"line" | "area" | "bar">("line");
+  const [filters, setFilters] = useState<AdminFilterState>(dashboardFilterState);
+  const [operationNotice, setOperationNotice] = useState("");
   const [metrics, setMetrics] = useState({
     kpis,
-    alerts: [
-      ["拥堵预警", "黄鹤楼核心区域密度已达 4.2 人/㎡", "高"],
-      ["库存预警", "黄鹤楼 sandbox 成人票候选库存不足，剩余 368 张", "中"],
-      ["经营异常", "江汉关周边餐饮订单取消率异常偏高", "中"],
-      ["设备提醒", "黄鹤楼西门闸机 3 号通道离线", "低"]
-    ],
-    hotspots: [
-      ["门票预约", "5,842", "24.21%", "+12.35%"],
-      ["索道运营时间", "3,276", "13.57%", "+5.21%"],
-      ["停车场位置", "2,915", "12.07%", "+1.84%"],
-      ["天气查询", "2,104", "8.72%", "-3.12%"],
-      ["景点介绍", "1,876", "7.77%", "+2.05%"]
-    ]
+    hotspots: defaultDashboardHotspots,
+    scopeLabel: "全部关键词 / 全部景区 / 全部状态 / 实时总览",
+    sourceNote: "服务端统计 orders、ticket_locks、review_records；游客数为真实 POI + sandbox 演示基准，不作为筛选结果。"
   });
 
   useEffect(() => {
-    fetchAdminMetrics().then((data) => {
+    fetchAdminMetrics(filters).then((data) => {
       setMetrics({
         kpis: data.kpis,
-        alerts: data.alerts.map((alert) => [alert.title, alert.desc, alert.level]),
-        hotspots: data.hotspots
+        hotspots: normalizeHotspots(data.hotspots, data.kpis, data.scopeLabel),
+        scopeLabel: data.scopeLabel ?? describeAdminFilterScope(filters),
+        sourceNote: data.sourceNote ?? "服务端统计 orders、ticket_locks、review_records。"
       });
     });
-  }, []);
+  }, [filters]);
+
+  const dashboardOperationMetadata = {
+    filters,
+    scopeLabel: metrics.scopeLabel,
+    sourceNote: metrics.sourceNote
+  };
+
+  const exportDashboardData = () => {
+    triggerOperation({
+      scope: "admin",
+      type: "admin.dashboard.export",
+      label: "导出运营看板数据",
+      metadata: dashboardOperationMetadata,
+      openDownload: true
+    });
+    setOperationNotice(`已发起导出：${metrics.scopeLabel}`);
+  };
+
+  const generateDashboardReport = () => {
+    triggerOperation({
+      scope: "admin",
+      type: "admin.dashboard.report",
+      label: "生成运营日报",
+      metadata: dashboardOperationMetadata,
+      openDownload: true
+    });
+    setOperationNotice(`已发起日报生成：${metrics.scopeLabel}`);
+  };
 
   return (
     <div className="admin-dashboard">
@@ -105,21 +239,39 @@ export function DashboardPage() {
           eyebrow="智慧文旅运营平台"
           title="运营看板"
           subtitle="客流、咨询、转化、订单、投诉、商户表现和活动效果实时联动"
-          actions={<><button className="ghost-btn"><Download size={16} /> 导出数据</button><button className="primary-btn"><FileText size={16} /> 生成日报</button></>}
+          actions={<><button className="ghost-btn" onClick={exportDashboardData}><Download size={16} /> 导出数据</button><button className="primary-btn" onClick={generateDashboardReport}><FileText size={16} /> 生成日报</button></>}
         />
         <div className="admin-control-row">
-          <FilterBar dense />
+          <FilterBar
+            dense
+            scenicOptions={reviewScenicOptions}
+            statusOptions={dashboardStatusOptions}
+            keywordPlaceholder="搜订单、锁票、审核、商户"
+            scopeTitle="筛选范围：运营看板服务端数据"
+            scopeNote="作用于订单、支付、锁票、待审核与咨询热点；游客数为 POI + sandbox 演示基准。"
+            onQuery={setFilters}
+            onReset={() => setFilters(dashboardFilterState)}
+          />
           <div className="ops-clock">
             <span>今日运营窗口</span>
             <strong>06:00 - 23:00</strong>
             <StatusTag tone="green">数据延迟 &lt; 45s</StatusTag>
           </div>
         </div>
+        <div className="dashboard-source-strip" aria-live="polite">
+          <span>当前筛选</span>
+          <strong>{metrics.scopeLabel}</strong>
+          <p>{metrics.sourceNote}</p>
+        </div>
+        {operationNotice ? <p className="muted dashboard-operation-notice">{operationNotice}</p> : null}
       </section>
       <div className="grid admin-kpi-grid admin-metrics">
         {metrics.kpis.map((metric) => <MetricCard key={metric.label} metric={metric} />)}
       </div>
       <div className="admin-chart-grid">
+        <ChartCard title="预约到游览转化漏斗" action={<StatusTag tone="blue">今日</StatusTag>} className="funnel-chart-card">
+          <FunnelPanel />
+        </ChartCard>
         <ChartCard title="景区客流热力分布" action={<StatusTag tone="green">实时</StatusTag>}>
           <MapPanel compact scenic />
         </ChartCard>
@@ -134,21 +286,10 @@ export function DashboardPage() {
         }>
           <TrafficChart type={chartType} />
         </ChartCard>
-        <ChartCard title="预约到游览转化漏斗" action={<StatusTag tone="blue">今日</StatusTag>}>
-          <FunnelPanel />
-        </ChartCard>
       </div>
-      <div className="grid grid-2 admin-row">
-        <Section title="咨询热点 TOP5">
-          <ReviewTable columns={["咨询主题", "咨询量", "占比", "较昨日"]} rows={metrics.hotspots} />
-        </Section>
-        <Section title="告警中心" className="alert-center" action={<StatusTag tone="red">18</StatusTag>}>
-          {metrics.alerts.map(([title, desc, level]) => (
-            <div className="reason-row" key={title}>
-              <span style={{ background: level === "高" ? "var(--red)" : level === "中" ? "var(--orange)" : "var(--blue)" }}><AlertTriangle size={15} /></span>
-              <div><strong>{title}</strong><p className="muted">{desc}</p></div>
-            </div>
-          ))}
+      <div className="grid admin-row">
+        <Section title="咨询热点 TOP5" className="consultation-hotspots" action={<StatusTag tone="blue">共 {metrics.hotspots.length} 条</StatusTag>}>
+          <HotspotTable rows={metrics.hotspots} />
         </Section>
       </div>
       <div className="grid grid-2 admin-row">
@@ -157,7 +298,8 @@ export function DashboardPage() {
             ["武昌城市酒店", "128,635", "1,246", "98.35%"],
             ["肥肥虾庄江汉路店", "96,542", "1,102", "96.12%"],
             ["江汉关咖啡厅", "72,318", "876", "97.45%"],
-            ["黄鹤楼游客中心", "68,947", "654", "95.21%"]
+            ["黄鹤楼游客中心", "68,947", "654", "95.21%"],
+            ["黄鹤楼文创旗舰店", "52,486", "518", "94.88%"]
           ]} />
         </Section>
         <Section title="运营任务工单">
@@ -173,19 +315,60 @@ export function DashboardPage() {
   );
 }
 
+function HotspotTable({ rows }: { rows: string[][] }) {
+  const columns = ["咨询主题", "咨询量", "占比", "较昨日"];
+  return (
+    <div className="table-wrap">
+      <table className="table dashboard-hotspot-table">
+        <thead>
+          <tr>
+            {columns.map((column) => <th key={column}>{column}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length} className="muted">暂无匹配数据</td>
+            </tr>
+          ) : rows.map((row, index) => (
+            <tr key={`${row[0]}-${index}`}>
+              {columns.map((_, cellIndex) => <td key={cellIndex}>{row[cellIndex] ?? "-"}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function ContentPage() {
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState(merchants);
+  const [rows, setRows] = useState(() => merchants.map(ensureMerchantTag));
+  const [filters, setFilters] = useState<AdminFilterState>(defaultFilterState);
   const [merchantIds, setMerchantIds] = useState<string[]>([]);
+  const [selectedMerchantNames, setSelectedMerchantNames] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const [form, setForm] = useState({ name: "", category: "住宿", phone: "", desc: "" });
+  const contentTabs = ["商户管理", "景点内容管理", "活动专题管理", "FAQ知识库", "标签管理", "审核中心", "工作流配置"];
+  const [activeTab, setActiveTab] = useState(contentTabs[0]);
+  const visibleRows = useMemo(() => filterAdminRows(rows, filters), [filters, rows]);
+  const selectedVisibleRows = visibleRows.filter((row) => selectedMerchantNames.includes(merchantRowKey(row)));
 
   useEffect(() => {
     fetchMerchants().then((items) => {
       setMerchantIds(items.map((item) => item.id));
-      setRows(items.map((item) => [item.name, item.category, item.status, item.inventoryStatus, item.rating, String(item.orderCount), item.reviewStatus]));
+      setRows(items.map((item) => [item.name, item.category, item.status, item.inventoryStatus, item.rating, String(item.orderCount), item.reviewStatus, "未设置"]));
     }).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const visibleKeys = visibleRows.map(merchantRowKey);
+    setSelectedMerchantNames((current) => {
+      const next = current.filter((key) => visibleKeys.includes(key));
+      if (next.length) return next;
+      return visibleKeys[0] ? [visibleKeys[0]] : [];
+    });
+  }, [visibleRows]);
 
   const saveMerchant = async () => {
     const validation = validateRequired({ 商户名称: form.name, 联系人手机号: form.phone, 商户介绍: form.desc });
@@ -196,14 +379,64 @@ export function ContentPage() {
     try {
       const created = await createMerchant(form);
       setMerchantIds((prev) => [created.id, ...prev]);
-      setRows((prev) => [[created.name, created.category, created.status, created.inventoryStatus, created.rating, String(created.orderCount), created.reviewStatus], ...prev]);
+      setRows((prev) => [[created.name, created.category, created.status, created.inventoryStatus, created.rating, String(created.orderCount), created.reviewStatus, "未设置"], ...prev]);
+      setSelectedMerchantNames([created.name]);
       setNotice("已创建商户并发起审核，记录已落库。");
     } catch {
-      setRows((prev) => [[form.name, form.category, "营业中", "待同步", "暂无", "0", "待审核"], ...prev]);
+      setRows((prev) => [[form.name, form.category, "营业中", "待同步", "暂无", "0", "待审核", "未设置"], ...prev]);
+      setSelectedMerchantNames([form.name]);
       setNotice("服务端不可用，已创建本地演示商户。");
     }
     setOpen(false);
     setForm({ name: "", category: "住宿", phone: "", desc: "" });
+  };
+
+  const requireSelectedMerchants = () => {
+    if (selectedVisibleRows.length) return selectedVisibleRows;
+    setNotice("请先勾选至少一条商户记录。");
+    return [];
+  };
+
+  const batchEnableMerchants = () => {
+    const selected = requireSelectedMerchants();
+    if (!selected.length) return;
+    const selectedKeys = new Set(selected.map(merchantRowKey));
+    setRows((prev) => prev.map((row) => selectedKeys.has(merchantRowKey(row)) ? [row[0], row[1], "营业中", row[3], row[4], row[5], row[6], row[7] ?? "未设置"] : row));
+    setNotice(`已批量启用 ${selected.length} 个商户，营业状态已更新。`);
+  };
+
+  const batchSyncMerchants = async () => {
+    const selected = requireSelectedMerchants();
+    if (!selected.length) return;
+    const selectedKeys = new Set(selected.map(merchantRowKey));
+    const selectedIndexes = rows.map((row, index) => selectedKeys.has(merchantRowKey(row)) ? index : -1).filter((index) => index >= 0);
+    setNotice(`正在批量同步 ${selected.length} 个商户库存...`);
+    try {
+      await Promise.allSettled(selectedIndexes.map((index) => merchantIds[index] ? syncMerchantInventory(merchantIds[index]) : Promise.resolve()));
+      setNotice(`已批量同步 ${selected.length} 个商户库存，库存状态已更新。`);
+    } catch {
+      setNotice(`服务端不可用，已本地演示同步 ${selected.length} 个商户库存。`);
+    } finally {
+      setRows((prev) => prev.map((row) => selectedKeys.has(merchantRowKey(row)) ? [row[0], row[1], row[2], "已同步", row[4], row[5], row[6], row[7] ?? "未设置"] : row));
+    }
+  };
+
+  const batchTagMerchants = () => {
+    const selected = requireSelectedMerchants();
+    if (!selected.length) return;
+    const selectedKeys = new Set(selected.map(merchantRowKey));
+    setRows((prev) => prev.map((row) => selectedKeys.has(merchantRowKey(row)) ? [row[0], row[1], row[2], row[3], row[4], row[5], row[6], "优先推荐"] : row));
+    setNotice(`已为 ${selected.length} 个商户设置「优先推荐」标签。`);
+  };
+
+  const batchDeleteMerchants = () => {
+    const selected = requireSelectedMerchants();
+    if (!selected.length) return;
+    const selectedKeys = new Set(selected.map(merchantRowKey));
+    setRows((prev) => prev.filter((row) => !selectedKeys.has(merchantRowKey(row))));
+    setMerchantIds((prev) => prev.filter((_, index) => !selectedKeys.has(merchantRowKey(rows[index] ?? []))));
+    setSelectedMerchantNames([]);
+    setNotice(`已删除 ${selected.length} 个演示商户记录。`);
   };
 
   return (
@@ -214,34 +447,46 @@ export function ContentPage() {
         actions={<><button className="primary-btn" onClick={() => setOpen(true)}><Plus size={16} /> 新增商户</button><button className="ghost-btn"><Download size={16} /> 导出数据</button></>}
       />
       <div className="tab-strip" style={{ marginBottom: 16 }}>
-        {["商户管理", "景点内容管理", "活动专题管理", "FAQ知识库", "标签管理", "审核中心", "工作流配置"].map((item) => <button className={item === "商户管理" ? "primary-btn" : "ghost-btn"} key={item}>{item}</button>)}
+        {contentTabs.map((item) => <button className={activeTab === item ? "primary-btn" : "ghost-btn"} onClick={() => { setActiveTab(item); setNotice(`${item}视图已打开。`); }} key={item}>{item}</button>)}
       </div>
-      <FilterBar />
-      <Section title="商户列表" action={<StatusTag tone="blue">共 128 条</StatusTag>} className="card-pad" >
+      <FilterBar onQuery={setFilters} onReset={() => setFilters(defaultFilterState)} />
+      {activeTab === "商户管理" ? <Section title="商户列表" action={<StatusTag tone="blue">共 {visibleRows.length} 条 · 已选 {selectedVisibleRows.length}</StatusTag>} className="card-pad" >
         <div className="filters" style={{ marginBottom: 12 }}>
-          <button className="ghost-btn">批量启用</button>
-          <button className="ghost-btn">批量同步库存</button>
-          <button className="ghost-btn">批量设置标签</button>
-          <button className="ghost-btn" style={{ color: "var(--red)" }}>批量删除</button>
+          <button className="ghost-btn" onClick={batchEnableMerchants}>批量启用</button>
+          <button className="ghost-btn" onClick={() => void batchSyncMerchants()}>批量同步库存</button>
+          <button className="ghost-btn" onClick={batchTagMerchants}>批量设置标签</button>
+          <button className="ghost-btn" style={{ color: "var(--red)" }} onClick={batchDeleteMerchants}>批量删除</button>
         </div>
         {notice ? <p className="muted">{notice}</p> : null}
         <ReviewTable
           columns={merchantColumns}
-          rows={rows}
+          rows={visibleRows}
           action="同步库存"
-          onAction={async (_, index) => {
+          getRowKey={merchantRowKey}
+          selectedRowKeys={selectedMerchantNames}
+          onRowCheckedChange={(row, _index, checked) => {
+            const key = merchantRowKey(row);
+            setSelectedMerchantNames((current) => checked ? Array.from(new Set([...current, key])) : current.filter((item) => item !== key));
+          }}
+          onAllCheckedChange={(checked, nextRows) => setSelectedMerchantNames(checked ? nextRows.map(merchantRowKey) : [])}
+          onAction={async (row) => {
+            const rowIndex = rows.findIndex((item) => merchantRowKey(item) === merchantRowKey(row));
+            if (rowIndex < 0) return;
             try {
-              const id = merchantIds[index];
+              const id = merchantIds[rowIndex];
               if (id) await syncMerchantInventory(id);
-              setRows((prev) => prev.map((row, rowIndex) => rowIndex === index ? [...row.slice(0, 3), "已同步", ...row.slice(4)] : row));
+              setRows((prev) => prev.map((item, index) => index === rowIndex ? [...item.slice(0, 3), "已同步", ...item.slice(4)] : item));
               setNotice("库存同步状态已通过服务端更新。");
             } catch {
-              setRows((prev) => prev.map((row, rowIndex) => rowIndex === index ? [...row.slice(0, 3), row[3] === "已同步" ? "同步失败" : "已同步", ...row.slice(4)] : row));
+              setRows((prev) => prev.map((item, index) => index === rowIndex ? [...item.slice(0, 3), item[3] === "已同步" ? "同步失败" : "已同步", ...item.slice(4)] : item));
               setNotice("服务端不可用，已切换本地演示同步。");
             }
           }}
         />
-      </Section>
+      </Section> : <Section title={activeTab} action={<StatusTag tone="blue">演示视图</StatusTag>} className="card-pad">
+        {notice ? <p className="muted">{notice}</p> : null}
+        <p className="muted">当前已切换到{activeTab}，可通过左侧运营导航进入对应完整页面。</p>
+      </Section>}
       <div className="grid grid-3" style={{ marginTop: 18 }}>
         <Section title="审核中心" action={<StatusTag tone="red">12</StatusTag>}>
           {["待审核商户 5", "待审核内容 7", "即将过期内容 3", "驳回待处理 0"].map((item) => <p key={item}><StatusTag tone="orange">待办</StatusTag> {item}</p>)}
@@ -269,7 +514,11 @@ export function ContentPage() {
 
 export function KnowledgePage() {
   const [rows, setRows] = useState(knowledgeRows);
+  const [filters, setFilters] = useState<AdminFilterState>(defaultFilterState);
   const [notice, setNotice] = useState("");
+  const knowledgeTabs = ["FAQ列表", "分类管理", "知识导入", "版本记录"];
+  const [activeTab, setActiveTab] = useState(knowledgeTabs[0]);
+  const visibleRows = useMemo(() => filterAdminRows(rows, filters), [filters, rows]);
   const metrics: MetricItem[] = [
     { label: "总FAQ数", value: "1,248", delta: "较昨日 +28", tone: "blue", icon: BookOpenCheck },
     { label: "已发布", value: "1,036", delta: "较昨日 +21", tone: "green", icon: CheckCircle2 },
@@ -279,21 +528,28 @@ export function KnowledgePage() {
   return (
     <>
       <PageHeader title="FAQ知识库管理" subtitle="管理旅行相关 FAQ 与知识内容，支持多语言、版本管理与数据溯源" actions={<button className="primary-btn" onClick={() => setNotice("索引重建任务已进入演示队列。")}><DatabaseZap size={16} /> 重新构建索引</button>} />
-      <div className="tab-strip" style={{ marginBottom: 16 }}>{["FAQ列表", "分类管理", "知识导入", "版本记录"].map((item) => <button className={item === "FAQ列表" ? "primary-btn" : "ghost-btn"} key={item}>{item}</button>)}</div>
+      <div className="tab-strip" style={{ marginBottom: 16 }}>{knowledgeTabs.map((item) => <button className={activeTab === item ? "primary-btn" : "ghost-btn"} onClick={() => { setActiveTab(item); setNotice(`${item}视图已打开。`); }} key={item}>{item}</button>)}</div>
       <div className="grid grid-4">
         {metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}
       </div>
       <div className="wide-split knowledge-layout">
         <main className="grid">
-          <FilterBar dense />
+          <FilterBar
+            dense
+            statusOptions={["全部状态", "已发布", "待更新"]}
+            onQuery={setFilters}
+            onReset={() => setFilters(defaultFilterState)}
+          />
           <Section title="知识条目" className="knowledge-table-section">
             {notice ? <p className="muted">{notice}</p> : null}
             <ReviewTable
               columns={knowledgeColumns}
-              rows={rows}
+              rows={visibleRows}
               action="切换发布"
-              onAction={(_, index) => {
-                setRows((prev) => prev.map((row, rowIndex) => rowIndex === index ? [...row.slice(0, 4), row[4] === "已发布" ? "待更新" : "已发布", row[5]] : row));
+              onAction={(row) => {
+                const rowIndex = rows.findIndex((item) => item === row);
+                if (rowIndex < 0) return;
+                setRows((prev) => prev.map((item, index) => index === rowIndex ? [...item.slice(0, 4), item[4] === "已发布" ? "待更新" : "已发布", item[5]] : item));
                 setNotice("知识条目状态已更新。");
               }}
             />
@@ -335,6 +591,10 @@ export function KnowledgePage() {
 export function MerchantPage() {
   const [openForBusiness, setOpenForBusiness] = useState(true);
   const [inventoryNotice, setInventoryNotice] = useState("库存数据为演示状态。");
+  const [merchantOrders, setMerchantOrders] = useState<Order[]>([]);
+  const [merchantNotice, setMerchantNotice] = useState("");
+  const [merchantPanel, setMerchantPanel] = useState<"overview" | "preview" | "marketing">("overview");
+  const [showAllOrders, setShowAllOrders] = useState(false);
   const metrics: MetricItem[] = [
     { label: "今日订单金额", value: "￥18,752", delta: "较昨日 +12.45%", tone: "blue", icon: Store },
     { label: "今日订单数", value: "128", delta: "较昨日 +15.23%", tone: "purple", icon: PackageOpen },
@@ -342,23 +602,97 @@ export function MerchantPage() {
     { label: "今日访客数", value: "2,846", delta: "较昨日 +8.32%", tone: "orange", icon: Eye },
     { label: "好评率", value: "98.2%", delta: "较昨日 +0.8%", tone: "red", icon: Bell }
   ];
+
+  useEffect(() => {
+    fetchOrders().then((items) => setMerchantOrders(items.slice(0, 8))).catch(() => undefined);
+  }, []);
+
+  const visibleMerchantOrders = showAllOrders ? merchantOrders : merchantOrders.slice(0, 4);
+  const fallbackOrderRows = [
+    ["15:25", "武昌城市酒店·家庭房1间", "张**", "￥680", "待核销"],
+    ["14:48", "武昌城市酒店·江景大床房1间", "李**", "￥580", "已核销"],
+    ["14:03", "武昌城市酒店·双床房1间", "王**", "￥480", "已核销"],
+    ["13:37", "黄鹤楼演示票+武昌城市酒店套餐", "陈**", "￥899", "待核销"]
+  ];
+  const orderRows = merchantOrders.length ? visibleMerchantOrders.map((order) => [
+    order.createdAt.slice(11, 16),
+    order.title,
+    order.visitorInfo[0]?.name ?? "游客",
+    `￥${order.amount}`,
+    order.status === "verified" ? "已核销" : order.status === "paid" || order.status === "ready_to_visit" ? "待核销" : "待支付"
+  ]) : fallbackOrderRows;
+
+  const verifyOrder = async (index: number) => {
+    const order = merchantOrders[index];
+    if (!order?.voucherCode) {
+      triggerOperation({ scope: "merchant", type: "ticket.verify", label: "核销", metadata: { index } });
+      return;
+    }
+    try {
+      const voucher = await verifyTicketVoucher({ voucherCode: order.voucherCode, visitDate: order.visitDate, slotId: order.slotId });
+      setMerchantOrders((prev) => prev.map((item) => item.id === order.id ? { ...item, status: "verified" } : item));
+      setMerchantNotice(`凭证 ${voucher.code} 已完成服务端核销。`);
+    } catch (error) {
+      setMerchantNotice(error instanceof Error ? `核销失败：${error.message}` : "核销失败。");
+    }
+  };
+
+  const verifyLatest = () => {
+    const index = merchantOrders.findIndex((order) => order.voucherCode && order.status !== "verified");
+    if (index < 0) {
+      triggerOperation({ scope: "merchant", type: "ticket.verify", label: "扫码核销", metadata: { source: "merchant-page" } });
+      return;
+    }
+    void verifyOrder(index);
+  };
+
+  const toggleBusiness = () => {
+    const nextOpen = !openForBusiness;
+    setOpenForBusiness(nextOpen);
+    triggerOperation({ scope: "merchant", type: "merchant.status", label: nextOpen ? "恢复营业" : "暂停营业" });
+  };
+
+  const openMerchantPanel = (panel: "preview" | "marketing") => {
+    setMerchantPanel(panel);
+    setMerchantNotice(panel === "preview"
+      ? "店铺预览已打开：游客端将展示门店简介、在售房型与 sandbox 套餐入口。"
+      : "营销中心已打开：优惠券、套餐和活动投放均为演示配置，不会触达真实渠道。");
+    triggerOperation({ scope: "merchant", type: panel === "preview" ? "merchant.preview" : "merchant.marketing", label: panel === "preview" ? "店铺预览" : "营销中心" });
+  };
+
   return (
     <>
-      <PageHeader title="商户工作台" subtitle={`下午好，武昌城市酒店。当前营业状态：${openForBusiness ? "营业中" : "暂停营业"}`} actions={<><button className="ghost-btn"><Eye size={16} /> 店铺预览</button><button className="ghost-btn"><QrIcon /> 扫码核销</button><button className="primary-btn" onClick={() => setOpenForBusiness((value) => !value)}>{openForBusiness ? "暂停营业" : "恢复营业"}</button></>} />
+      <PageHeader title="商户工作台" subtitle={`下午好，武昌城市酒店。当前营业状态：${openForBusiness ? "营业中" : "暂停营业"}`} actions={<><button className="ghost-btn" onClick={() => openMerchantPanel("preview")}><Eye size={16} /> 店铺预览</button><button className="ghost-btn" onClick={verifyLatest}><QrIcon /> 扫码核销</button><button className="primary-btn" onClick={toggleBusiness}>{openForBusiness ? "暂停营业" : "恢复营业"}</button></>} />
       <div className="grid grid-5">
         {metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}
       </div>
+      {merchantNotice ? <p className="audit-notice">{merchantNotice}</p> : null}
+      {merchantPanel === "preview" ? (
+        <Section title="店铺预览" className="card-pad" action={<StatusTag tone="blue">游客端演示</StatusTag>}>
+          <div className="spot-card compact">
+            <img src={spotImages.hotel} alt="武昌城市酒店预览" />
+            <div>
+              <strong>武昌城市酒店</strong>
+              <p className="muted">展示门店简介、房型库存、套餐入口与 sandbox 票务联动，不代表真实上架。</p>
+              <StatusTag tone={openForBusiness ? "green" : "orange"}>{openForBusiness ? "营业中" : "暂停营业"}</StatusTag>
+            </div>
+          </div>
+        </Section>
+      ) : null}
+      {merchantPanel === "marketing" ? (
+        <Section title="营销中心" className="card-pad" action={<StatusTag tone="orange">演示配置</StatusTag>}>
+          <div className="grid grid-3">
+            {["优惠券 8 张 · 可编辑", "套餐 5 个 · sandbox 联动", "活动投放 3 个 · 待报名"].map((item) => <div className="empty-state" key={item}>{item}</div>)}
+          </div>
+        </Section>
+      ) : null}
       <div className="grid grid-3" style={{ marginTop: 18 }}>
         <ChartCard title="营业概况" action={<div className="filters"><button className="ghost-btn">今日</button><button className="primary-btn">近7日</button></div>}>
           <TrafficChart type="area" />
         </ChartCard>
-        <Section title="今日订单" action={<button className="subtle-link">查看更多</button>}>
-          <ReviewTable columns={["时间", "商品", "游客", "金额", "状态"]} rows={[
-            ["15:25", "武昌城市酒店·家庭房1间", "张**", "￥680", "待核销"],
-            ["14:48", "武昌城市酒店·江景大床房1间", "李**", "￥580", "已核销"],
-            ["14:03", "武昌城市酒店·双床房1间", "王**", "￥480", "已核销"],
-            ["13:37", "黄鹤楼演示票+武昌城市酒店套餐", "陈**", "￥899", "待核销"]
-          ]} action="核销" />
+        <Section title={`今日订单${showAllOrders ? "（全部）" : ""}`} action={<button className="subtle-link" onClick={() => { setShowAllOrders(true); setMerchantNotice(`已展开更多订单，当前显示 ${orderRows.length} 条。`); }}>查看更多</button>}>
+          {merchantNotice ? <p className="muted">{merchantNotice}</p> : null}
+          <ReviewTable columns={["时间", "商品", "游客", "金额", "状态"]} rows={orderRows} action="核销" onAction={(_, index) => void verifyOrder(index)} />
         </Section>
         <Section title="库存同步">
           <p className="muted">{inventoryNotice}</p>
@@ -376,7 +710,7 @@ export function MerchantPage() {
         </Section>
         <Section title="营销工具">
           {["优惠券 已创建 8 张", "套餐管理 已创建 5 个", "活动投放 可报名 3 个活动"].map((item) => <p key={item}><StatusTag tone="blue">工具</StatusTag> {item}</p>)}
-          <button className="primary-btn">营销中心</button>
+          <button className="primary-btn" onClick={() => openMerchantPanel("marketing")}>营销中心</button>
         </Section>
       </div>
     </>
@@ -389,10 +723,27 @@ function QrIcon() {
 
 export function CampaignsPage() {
   const [rows, setRows] = useState(campaignRows);
+  const [filters, setFilters] = useState<AdminFilterState>(defaultFilterState);
   const [notice, setNotice] = useState("");
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", tag: "节庆/热门" });
+  const visibleRows = useMemo(() => filterAdminRows(rows, filters), [filters, rows]);
+
+  const saveCampaign = () => {
+    const validation = validateRequired({ 专题名称: form.name, 专题标签: form.tag });
+    if (!validation.ok) {
+      setNotice(validation.message);
+      return;
+    }
+    setRows((prev) => [[form.name, form.tag, "待上线", "-", "-", "-"], ...prev]);
+    setNotice(`已新建专题「${form.name}」，状态为待上线。`);
+    setForm({ name: "", tag: "节庆/热门" });
+    setOpen(false);
+  };
+
   return (
     <>
-      <PageHeader title="活动专题管理" subtitle="管理平台活动专题与营销活动，提升内容曝光与转化效果" actions={<><button className="primary-btn"><Plus size={16} /> 新建专题</button><button className="ghost-btn"><Download size={16} /> 导出数据</button></>} />
+      <PageHeader title="活动专题管理" subtitle="管理平台活动专题与营销活动，提升内容曝光与转化效果" actions={<><button className="primary-btn" onClick={() => setOpen(true)}><Plus size={16} /> 新建专题</button><button className="ghost-btn"><Download size={16} /> 导出数据</button></>} />
       <div className="grid grid-4">
         {[
           { label: "专题总数", value: "128", delta: "较昨日 +3", tone: "blue" },
@@ -402,15 +753,21 @@ export function CampaignsPage() {
         ].map((metric) => <MetricCard key={metric.label} metric={metric as MetricItem} />)}
       </div>
       <div className="grid" style={{ marginTop: 18 }}>
-        <FilterBar />
+        <FilterBar
+          statusOptions={["全部状态", "进行中", "待上线", "已结束", "已下架"]}
+          onQuery={setFilters}
+          onReset={() => setFilters(defaultFilterState)}
+        />
         <Section title="专题列表" action={<StatusTag tone="blue">共 128 条</StatusTag>}>
           {notice ? <p className="muted">{notice}</p> : null}
           <ReviewTable
             columns={campaignColumns}
-            rows={rows}
+            rows={visibleRows}
             action="上下架"
-            onAction={(_, index) => {
-              setRows((prev) => prev.map((row, rowIndex) => rowIndex === index ? [row[0], row[1], nextPublishStatus(row[2]), row[3], row[4], row[5]] : row));
+            onAction={(row) => {
+              const rowIndex = rows.findIndex((item) => item === row);
+              if (rowIndex < 0) return;
+              setRows((prev) => prev.map((item, index) => index === rowIndex ? [item[0], item[1], nextPublishStatus(item[2]), item[3], item[4], item[5]] : item));
               setNotice("活动专题状态已更新。");
             }}
           />
@@ -422,48 +779,110 @@ export function CampaignsPage() {
           {["06-03 江滩夜游周末线 待上线", "06-05 端午民俗文化节 待上线", "06-09 亲子研学季 待上线"].map((item) => <p key={item}><CalendarDays size={16} color="var(--blue)" /> {item}</p>)}
         </Section>
       </div>
+      <Drawer open={open} onClose={() => setOpen(false)} title="新建专题">
+        <div className="grid">
+          <input className="field" placeholder="专题名称" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          <select className="field" value={form.tag} onChange={(event) => setForm({ ...form, tag: event.target.value })}>
+            <option>节庆/热门</option>
+            <option>本地游/夜游季</option>
+            <option>亲子/研学</option>
+            <option>主题/摄影</option>
+          </select>
+          {notice ? <p className="muted">{notice}</p> : null}
+          <div className="filters">
+            <button className="primary-btn" onClick={saveCampaign}>保存专题</button>
+            <button className="ghost-btn" onClick={() => setOpen(false)}>取消</button>
+          </div>
+        </div>
+      </Drawer>
     </>
   );
 }
 
 export function ReviewPage() {
-  const [rows, setRows] = useState(reviewRows);
+  const [reviewItems, setReviewItems] = useState<ReviewListItem[]>(reviewRows.map((row) => ({ row })));
+  const [filters, setFilters] = useState<AdminFilterState>(defaultFilterState);
   const [selected, setSelected] = useState(reviewRows[0]);
-  const [reviewIds, setReviewIds] = useState<string[]>([]);
+  const [selectedReviewKeys, setSelectedReviewKeys] = useState<string[]>([]);
+  const [detailOpen, setDetailOpen] = useState(true);
   const [remark, setRemark] = useState("");
   const [notice, setNotice] = useState("");
+  const rows = useMemo(() => filterReviewRows(reviewItems.map((item) => item.row), filters), [filters, reviewItems]);
 
   useEffect(() => {
     fetchReviews().then((items) => {
-      const nextRows = items.map((item) => [item.subjectName, item.submitter, item.type, item.riskNote, item.status, item.submittedAt]);
-      setReviewIds(items.map((item) => item.id));
-      setRows(nextRows);
+      const nextItems = items.map((item) => ({
+        id: item.id,
+        row: [item.subjectName, item.submitter, item.type, item.riskNote, item.status, item.submittedAt]
+      }));
+      const nextRows = nextItems.map((item) => item.row);
+      setReviewItems(nextItems);
       if (nextRows[0]) setSelected(nextRows[0]);
     }).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!rows.length || rows.some((row) => sameReviewRow(row, selected))) return;
+    setSelected(rows[0]);
+    setRemark("");
+  }, [rows, selected]);
+
+  useEffect(() => {
+    const visibleKeys = rows.map(reviewRowKey);
+    setSelectedReviewKeys((current) => {
+      const next = current.filter((key) => visibleKeys.includes(key));
+      if (next.length) return next;
+      return visibleKeys[0] ? [visibleKeys[0]] : [];
+    });
+  }, [rows]);
 
   const applyReview = async (status: "已通过" | "已驳回") => {
     if (status === "已驳回" && !remark.trim()) {
       setNotice("驳回必须填写审核备注。");
       return;
     }
-    const index = rows.findIndex((row) => row[0] === selected[0]);
+    const selectedItem = reviewItems.find((item) => sameReviewRow(item.row, selected));
     try {
-      const id = reviewIds[index];
-      if (id) await decideReview(id, status, remark);
+      if (selectedItem?.id) await decideReview(selectedItem.id, status, remark);
       setNotice(`已通过服务端${status === "已通过" ? "通过" : "驳回"}：${selected[0]}`);
     } catch {
       setNotice(`服务端不可用，已本地演示${status === "已通过" ? "通过" : "驳回"}：${selected[0]}`);
     } finally {
-      setRows((prev) => prev.map((row) => row[0] === selected[0] ? [row[0], row[1], row[2], row[3], status, row[5]] : row));
+      setReviewItems((prev) => prev.map((item) => sameReviewRow(item.row, selected) ? { ...item, row: [item.row[0], item.row[1], item.row[2], item.row[3], status, item.row[5]] } : item));
       setSelected((prev) => [prev[0], prev[1], prev[2], prev[3], status, prev[5]]);
+      setRemark("");
+    }
+  };
+
+  const applyBatchReview = async (status: "已通过" | "已驳回") => {
+    const selectedRows = rows.filter((row) => selectedReviewKeys.includes(reviewRowKey(row)));
+    if (!selectedRows.length) {
+      setNotice("请先勾选至少一条审核记录。");
+      return;
+    }
+    if (status === "已驳回" && !remark.trim()) {
+      setNotice("批量驳回必须填写审核备注。");
+      return;
+    }
+    const selectedKeys = new Set(selectedRows.map(reviewRowKey));
+    const selectedItems = reviewItems.filter((item) => selectedKeys.has(reviewRowKey(item.row)));
+    try {
+      await Promise.allSettled(selectedItems.map((item) => item.id ? decideReview(item.id, status, remark) : Promise.resolve()));
+      setNotice(`已批量${status === "已通过" ? "通过" : "驳回"} ${selectedRows.length} 条审核记录。`);
+    } catch {
+      setNotice(`服务端不可用，已本地演示批量${status === "已通过" ? "通过" : "驳回"} ${selectedRows.length} 条审核记录。`);
+    } finally {
+      setReviewItems((prev) => prev.map((item) => selectedKeys.has(reviewRowKey(item.row)) ? { ...item, row: [item.row[0], item.row[1], item.row[2], item.row[3], status, item.row[5]] } : item));
+      if (selectedKeys.has(reviewRowKey(selected))) {
+        setSelected((prev) => [prev[0], prev[1], prev[2], prev[3], status, prev[5]]);
+      }
       setRemark("");
     }
   };
 
   return (
     <>
-      <PageHeader title="审核中心" subtitle="商户审核、内容审核、活动审核与风险复核统一处理" actions={<><button className="primary-btn"><Send size={16} /> 批量通过</button><button className="ghost-btn" style={{ color: "var(--red)" }}>批量驳回</button></>} />
+      <PageHeader title="审核中心" subtitle="商户审核、内容审核、活动审核与风险复核统一处理" actions={<><button className="primary-btn" onClick={() => void applyBatchReview("已通过")}><Send size={16} /> 批量通过</button><button className="ghost-btn" style={{ color: "var(--red)" }} onClick={() => void applyBatchReview("已驳回")}>批量驳回</button></>} />
       <div className="grid grid-5">
         {[
           { label: "待审核", value: "128", delta: "较昨日 +18", tone: "blue" },
@@ -473,11 +892,32 @@ export function ReviewPage() {
           { label: "驳回率", value: "14.63%", delta: "较昨日 +1.28%", tone: "orange" }
         ].map((metric) => <MetricCard key={metric.label} metric={metric as MetricItem} />)}
       </div>
-      <div className="wide-split" style={{ gridTemplateColumns: "minmax(0,1fr) 380px", marginTop: 18 }}>
+      <div className="wide-split review-layout" style={{ marginTop: 18 }}>
         <main className="grid">
-          <FilterBar dense />
+          <FilterBar
+            dense
+            scenicOptions={reviewScenicOptions}
+            statusOptions={reviewStatusOptions}
+            onQuery={setFilters}
+            onReset={() => setFilters(defaultFilterState)}
+          />
           <Section title="审核列表">
-            <ReviewTable columns={reviewColumns} rows={rows} action="查看" onAction={(row) => setSelected(row)} />
+            <ReviewTable
+              columns={reviewColumns}
+              rows={rows}
+              action="查看"
+              getRowKey={reviewRowKey}
+              selectedRowKeys={selectedReviewKeys}
+              onRowCheckedChange={(row, _index, checked) => {
+                const key = reviewRowKey(row);
+                setSelectedReviewKeys((current) => checked ? Array.from(new Set([...current, key])) : current.filter((item) => item !== key));
+              }}
+              onAllCheckedChange={(checked, nextRows) => setSelectedReviewKeys(checked ? nextRows.map(reviewRowKey) : [])}
+              onAction={(row) => {
+                setSelected(row);
+                setDetailOpen(true);
+              }}
+            />
           </Section>
           <div className="grid grid-2">
             <Section title="审核日志">
@@ -490,8 +930,8 @@ export function ReviewPage() {
             <ChartCard title="审核趋势（7日）"><TrafficChart type="line" /></ChartCard>
           </div>
         </main>
-        <Section title="审核详情" className="audit-detail-panel" action={<button className="ghost-btn">收起</button>}>
-          <div className="audit-detail-body">
+        <Section title="审核详情" className="audit-detail-panel" action={<button className="ghost-btn" onClick={() => setDetailOpen((open) => !open)}>{detailOpen ? "收起" : "展开"}</button>}>
+          {detailOpen ? <div className="audit-detail-body">
             <div className="audit-summary-card">
               <img src={spotImages.food} alt="审核材料" />
               <div className="audit-summary-main">
@@ -521,7 +961,7 @@ export function ReviewPage() {
               <textarea className="field" placeholder="请填写审核备注" value={remark} onChange={(event) => setRemark(event.target.value)} />
             </div>
             <div className="audit-action-row"><button className="ghost-btn" onClick={() => setRemark("")}>取消</button><button className="ghost-btn danger" onClick={() => applyReview("已驳回")}><Trash2 size={15} /> 驳回</button><button className="primary-btn" onClick={() => applyReview("已通过")}>通过</button></div>
-          </div>
+          </div> : <p className="muted">审核详情已收起，当前选中：{selected[0]} · {selected[4]}。</p>}
         </Section>
       </div>
     </>
@@ -529,20 +969,65 @@ export function ReviewPage() {
 }
 
 export function WorkflowPage() {
+  const baseWorkflowTabs = ["商户入驻审核流程", "内容发布审核流程", "活动上线流程", "工单升级规则"];
   const [node, setNode] = useState(workflowNodes[1]);
+  const [customFlows, setCustomFlows] = useState<string[]>([]);
+  const workflowTabs = [...baseWorkflowTabs, ...customFlows];
+  const [activeFlow, setActiveFlow] = useState(baseWorkflowTabs[0]);
+  const [notice, setNotice] = useState("");
+  const [version, setVersion] = useState("v1.2.0");
+  const [flowStatus, setFlowStatus] = useState("启用中");
+  const [extraLogs, setExtraLogs] = useState<string[][]>([]);
   const logs = useMemo(() => [
-    ["2026-06-02 14:35", "张景区", "更新节点", `修改了「${node.title}」的 SLA 配置`],
+    ...extraLogs,
+    ["2026-06-02 14:35", "张景区", "更新节点", `修改了「${activeFlow} / ${node.title}」的 SLA 配置`],
     ["2026-06-02 11:20", "李运营", "新增节点", "在资质审核后新增实地核验节点"],
     ["2026-06-01 18:10", "王法务", "发布流程", "发布流程版本 v1.2.0"]
-  ], [node.title]);
+  ], [activeFlow, extraLogs, node.title]);
+
+  const addWorkflowLog = (action: string, detail: string) => {
+    setExtraLogs((prev) => [[operationTime(), "张运营", action, detail], ...prev].slice(0, 6));
+  };
+
+  const createFlow = () => {
+    const name = `新建演示流程 ${customFlows.length + 1}`;
+    setCustomFlows((prev) => [...prev, name]);
+    setActiveFlow(name);
+    setFlowStatus("草稿已保存");
+    setNotice(`已创建流程「${name}」，当前为演示草稿。`);
+    addWorkflowLog("新建流程", `创建了「${name}」`);
+  };
+
+  const saveDraft = () => {
+    setFlowStatus("草稿已保存");
+    setNotice(`已保存「${activeFlow}」草稿，节点：${node.title}。`);
+    addWorkflowLog("保存草稿", `保存了「${activeFlow} / ${node.title}」草稿配置`);
+    triggerOperation({ scope: "admin", type: "workflow.save", label: "保存草稿", metadata: { activeFlow, nodeId: node.id } });
+  };
+
+  const publishConfig = () => {
+    setVersion("v1.2.1");
+    setFlowStatus("已发布");
+    setNotice(`已发布「${activeFlow}」演示配置，版本更新为 v1.2.1。`);
+    addWorkflowLog("发布配置", `发布了「${activeFlow}」版本 v1.2.1`);
+    triggerOperation({ scope: "admin", type: "workflow.publish", label: "发布配置", metadata: { activeFlow, version: "v1.2.1" } });
+  };
+
+  const saveNodeConfig = () => {
+    setNotice(`已保存节点「${node.title}」配置，SLA：${node.sla}。`);
+    addWorkflowLog("保存配置", `保存了「${activeFlow} / ${node.title}」节点配置`);
+    triggerOperation({ scope: "admin", type: "workflow.save", label: "保存配置", metadata: { activeFlow, nodeId: node.id } });
+  };
+
   return (
     <>
       <PageHeader
         title="工作流配置"
         subtitle="可视化配置平台各类内容与业务流程，支持条件分支、并行会签、自动化触发与通知"
-        actions={<><button className="ghost-btn"><Plus size={16} /> 新建流程</button><button className="ghost-btn"><Save size={16} /> 保存草稿</button><button className="primary-btn">发布配置</button></>}
+        actions={<><button className="ghost-btn" onClick={createFlow}><Plus size={16} /> 新建流程</button><button className="ghost-btn" onClick={saveDraft}><Save size={16} /> 保存草稿</button><button className="primary-btn" onClick={publishConfig}>发布配置</button></>}
       />
-      <div className="tab-strip" style={{ marginBottom: 16 }}>{["商户入驻审核流程", "内容发布审核流程", "活动上线流程", "工单升级规则"].map((item) => <button className={item === "商户入驻审核流程" ? "primary-btn" : "ghost-btn"} key={item}>{item}</button>)}</div>
+      {notice ? <p className="audit-notice">{notice}</p> : null}
+      <div className="tab-strip" style={{ marginBottom: 16 }}>{workflowTabs.map((item) => <button className={activeFlow === item ? "primary-btn" : "ghost-btn"} onClick={() => setActiveFlow(item)} key={item}>{item}</button>)}</div>
       <div className="wide-split">
         <Section title="流程步骤">
           <div className="grid">
@@ -564,7 +1049,7 @@ export function WorkflowPage() {
             <label>处理方式</label><div className="filters"><StatusTag>单人处理</StatusTag><StatusTag tone="slate">多人会签</StatusTag></div>
             <label>工具能力</label>
             {["知识库检索", "票务库存接口", "地图路线服务", "安全审核日志"].map((item) => <p key={item}><StatusTag tone="blue">已启用</StatusTag> {item}</p>)}
-            <button className="primary-btn">保存配置</button>
+            <button className="primary-btn" onClick={saveNodeConfig}>保存配置</button>
           </div>
         </Section>
       </div>
@@ -573,8 +1058,8 @@ export function WorkflowPage() {
           <ReviewTable columns={["时间", "操作人", "操作", "变更内容"]} rows={logs} />
         </Section>
         <Section title="流程概览">
-          <p>当前版本：v1.2.0 <StatusTag tone="green">已发布</StatusTag></p>
-          <p>流程状态：<StatusTag tone="green">启用中</StatusTag></p>
+          <p>当前版本：{version} <StatusTag tone={flowStatus === "草稿已保存" ? "orange" : "green"}>{flowStatus === "草稿已保存" ? "草稿" : "已发布"}</StatusTag></p>
+          <p>流程状态：<StatusTag tone={flowStatus === "草稿已保存" ? "orange" : "green"}>{flowStatus}</StatusTag></p>
           <Donut data={channelData.slice(0, 4).map((item) => ({ name: item.name, value: item.value, fill: item.fill }))} />
         </Section>
       </div>

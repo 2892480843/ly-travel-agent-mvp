@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AdminMetrics, Order, PaymentRecord, Role, TicketLock, TicketProduct, TicketSlot, TicketVoucher, VisitorInfo } from "../src/types";
+import type { AdminMetrics, AdminMetricsFilter, OperationResult, OperationScope, Order, PaymentRecord, Role, TicketLock, TicketProduct, TicketSlot, TicketVoucher, VisitorInfo } from "../src/types";
 import { getDb, withTransaction } from "./db";
 import { createPaymentProvider } from "./paymentProvider";
 import { getConfiguredPaymentProvider, getConfiguredTicketProvider, isProductionMode } from "./runtimeConfig";
@@ -96,6 +96,32 @@ type VoucherRow = {
   created_at: string;
 };
 
+type OperationRecordRow = {
+  id: string;
+  scope: OperationScope;
+  type: string;
+  label: string;
+  status: OperationResult["status"];
+  message: string;
+  actor_user_id?: string;
+  metadata_json: string;
+  created_at: string;
+};
+
+type ReviewMetricRow = {
+  subject_name: string;
+  submitter: string;
+  type: string;
+  risk_note: string;
+  status: string;
+  submitted_at: string;
+};
+
+type DashboardLockRow = TicketLockRow & {
+  poi_id: string;
+  product_name: string;
+};
+
 export function getUserByRole(role: Role) {
   return getDb().prepare("SELECT id, name, role, password_hash FROM users WHERE role = ?").get(role) as
     | { id: string; name: string; role: Role; password_hash: string }
@@ -132,16 +158,32 @@ export function deleteSession(sessionId: string) {
   getDb().prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
 }
 
-export function getAdminMetrics(): AdminMetrics {
+export function getAdminMetrics(filters: AdminMetricsFilter = {}): AdminMetrics {
   const database = getDb();
-  const orderCount = Number((database.prepare("SELECT COUNT(*) AS count FROM orders").get() as { count: number }).count);
-  const paidCount = Number((database.prepare("SELECT COUNT(*) AS count FROM orders WHERE status IN ('paid', 'ready_to_visit', 'verified')").get() as { count: number }).count);
-  const lockCount = Number((database.prepare("SELECT COUNT(*) AS count FROM ticket_locks WHERE status = 'active'").get() as { count: number }).count);
-  const reviewCount = Number((database.prepare("SELECT COUNT(*) AS count FROM review_records WHERE status IN ('待审核', '审核中')").get() as { count: number }).count);
-  const revenue = Number((database.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM orders WHERE status IN ('paid', 'ready_to_visit', 'verified')").get() as { total: number }).total);
+  const metricFilters = normalizeAdminMetricsFilters(filters);
+  const orders = (database.prepare("SELECT * FROM orders").all() as OrderRow[]).filter((row) => orderMatchesMetricFilters(row, metricFilters));
+  const locks = (database.prepare(`
+    SELECT ticket_locks.*, ticket_products.poi_id, ticket_products.name AS product_name
+    FROM ticket_locks
+    JOIN ticket_products ON ticket_products.id = ticket_locks.product_id
+  `).all() as DashboardLockRow[]).filter((row) => lockMatchesMetricFilters(row, metricFilters));
+  const reviews = (database.prepare(`
+    SELECT subject_name, submitter, type, risk_note, status, submitted_at
+    FROM review_records
+  `).all() as ReviewMetricRow[]).filter((row) => reviewMatchesMetricFilters(row, metricFilters));
+  const paidOrders = orders.filter((row) => isPaidOrderStatus(row.status));
+  const activeLocks = locks.filter((row) => row.status === "active");
+  const pendingReviews = reviews.filter((row) => ["待审核", "审核中"].includes(row.status));
+  const orderCount = orders.length;
+  const paidCount = paidOrders.length;
+  const lockCount = activeLocks.length;
+  const reviewCount = pendingReviews.length;
+  const revenue = paidOrders.reduce((total, row) => total + row.amount, 0);
+  const hasFilters = hasAdminMetricsFilters(metricFilters);
+  const scopeLabel = adminMetricsScopeLabel(metricFilters);
   return {
     kpis: [
-      { label: "今日游客数", value: "36,824", delta: "真实 POI + sandbox", tone: "blue" },
+      { label: "今日游客数", value: "36,824", delta: hasFilters ? "演示基准，不参与筛选" : "真实 POI + sandbox", tone: "blue" },
       { label: "订单总数", value: String(orderCount), delta: `已支付 ${paidCount}`, tone: "green" },
       { label: "支付收入", value: `￥${revenue}`, delta: "服务端支付状态", tone: "purple" },
       { label: "活跃锁票", value: String(lockCount), delta: "SQLite 事务锁定", tone: "orange" },
@@ -149,16 +191,131 @@ export function getAdminMetrics(): AdminMetrics {
       { label: "地图服务", value: process.env.MAP_PROVIDER || "fallback", delta: "provider adapter", tone: "cyan" }
     ],
     alerts: [
+      { title: "筛选口径", desc: `${scopeLabel}。筛选作用于订单、锁票、审核记录；游客数为 POI + sandbox 演示基准。`, level: "低" },
       { title: "库存预警", desc: "黄鹤楼 sandbox 候选时段库存低于阈值，锁票失败会明确返回库存不足。", level: "中" },
       { title: "支付沙箱", desc: "未配置真实支付密钥时，支付通过 sandbox provider 模拟。", level: "低" },
-      { title: "地图降级", desc: "未配置地图 key 时返回 fallback 路线和原因。", level: "低" }
+      hasFilters && orderCount + lockCount + reviewCount === 0
+        ? { title: "无匹配数据", desc: "当前筛选条件下暂无订单、锁票或审核记录匹配。", level: "中" }
+        : { title: "地图降级", desc: "未配置地图 key 时返回 fallback 路线和原因。", level: "低" }
     ],
     hotspots: [
-      ["门票预约", String(orderCount), "服务端订单", "+0"],
-      ["票务锁定", String(lockCount), "active locks", "+0"],
-      ["审核处理", String(reviewCount), "pending reviews", "+0"]
-    ]
+      ["订单匹配", String(orderCount), "orders", paidCount ? `已支付 ${paidCount}` : "暂无已支付"],
+      ["支付收入", `￥${revenue}`, "paid orders", paidCount ? `${paidCount} 笔` : "暂无支付"],
+      ["票务锁定", String(lockCount), "active locks", hasFilters ? "按当前筛选" : "+0"],
+      ["审核处理", String(reviewCount), "pending reviews", hasFilters ? "按当前筛选" : "+0"],
+      ["筛选口径", hasFilters ? "已应用" : "全量", "scope", scopeLabel]
+    ],
+    scopeLabel,
+    sourceNote: "服务端统计 orders、ticket_locks、review_records；游客数为真实 POI + sandbox 演示基准，不作为筛选结果。"
   };
+}
+
+function normalizeAdminMetricsFilters(filters: AdminMetricsFilter) {
+  return {
+    keyword: filters.keyword?.trim() ?? "",
+    scenic: filters.scenic && filters.scenic !== "全部景区" ? filters.scenic : "",
+    status: filters.status && filters.status !== "全部状态" ? filters.status : "",
+    date: filters.date?.trim() ?? ""
+  };
+}
+
+function hasAdminMetricsFilters(filters: ReturnType<typeof normalizeAdminMetricsFilters>) {
+  return Boolean(filters.keyword || filters.scenic || filters.status || filters.date);
+}
+
+function adminMetricsScopeLabel(filters: ReturnType<typeof normalizeAdminMetricsFilters>) {
+  return [
+    filters.keyword ? `关键词「${filters.keyword}」` : "全部关键词",
+    filters.scenic || "全部景区",
+    filters.status || "全部状态",
+    filters.date || "实时总览"
+  ].join(" / ");
+}
+
+function orderMatchesMetricFilters(row: OrderRow, filters: ReturnType<typeof normalizeAdminMetricsFilters>) {
+  return matchesKeyword(filters.keyword, [row.id, row.title, row.poi_id, row.ticket_name, row.status])
+    && matchesScenic(filters.scenic, [row.title, row.poi_id, row.ticket_name])
+    && matchesDate(filters.date, row.visit_date)
+    && matchesStatus(filters.status, [orderStatusLabel(row.status)]);
+}
+
+function lockMatchesMetricFilters(row: DashboardLockRow, filters: ReturnType<typeof normalizeAdminMetricsFilters>) {
+  return matchesKeyword(filters.keyword, [row.id, row.product_id, row.product_name, row.poi_id, row.status])
+    && matchesScenic(filters.scenic, [row.product_id, row.product_name, row.poi_id])
+    && matchesDate(filters.date, row.visit_date)
+    && matchesStatus(filters.status, [lockStatusLabel(row.status)]);
+}
+
+function reviewMatchesMetricFilters(row: ReviewMetricRow, filters: ReturnType<typeof normalizeAdminMetricsFilters>) {
+  return matchesKeyword(filters.keyword, [row.subject_name, row.submitter, row.type, row.risk_note, row.status])
+    && matchesScenic(filters.scenic, [row.subject_name, row.submitter, row.type, row.risk_note])
+    && matchesDate(filters.date, row.submitted_at)
+    && matchesStatus(filters.status, [row.status]);
+}
+
+function matchesKeyword(keyword: string, values: Array<string | undefined>) {
+  if (!keyword) return true;
+  const normalizedKeyword = normalizeText(keyword);
+  return values.some((value) => normalizeText(value).includes(normalizedKeyword));
+}
+
+function matchesScenic(scenic: string, values: Array<string | undefined>) {
+  if (!scenic) return true;
+  const aliases = scenicAliases(scenic).map(normalizeText);
+  return values.some((value) => {
+    const normalizedValue = normalizeText(value);
+    return aliases.some((alias) => normalizedValue.includes(alias));
+  });
+}
+
+function matchesDate(date: string, value: string | undefined) {
+  return !date || Boolean(value?.startsWith(date));
+}
+
+function matchesStatus(status: string, labels: string[]) {
+  if (!status) return true;
+  return labels.some((label) => label === status || label.includes(status) || status.includes(label));
+}
+
+function scenicAliases(scenic: string) {
+  if (scenic.includes("黄鹤楼")) return ["黄鹤楼", "yellow-crane", "yellow crane"];
+  if (scenic.includes("江汉关")) return ["江汉关", "江滩", "jianghan"];
+  if (scenic.includes("湖北") && scenic.includes("博物馆")) return ["湖北省博物馆", "湖北博物馆", "hubei"];
+  if (scenic.includes("武昌")) return ["武昌", "wuchang"];
+  return [scenic.replace(/(省)?博物馆$/, "")];
+}
+
+function normalizeText(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function orderStatusLabel(status: Order["status"]) {
+  const labels: Record<Order["status"], string> = {
+    pending_payment: "待支付",
+    paid: "已支付",
+    ready_to_visit: "待出行",
+    verified: "已核销",
+    cancelled: "已取消",
+    expired: "已过期",
+    payment_failed: "支付失败",
+    refunding: "退款中",
+    refunded: "已退款"
+  };
+  return labels[status] ?? status;
+}
+
+function lockStatusLabel(status: TicketLock["status"]) {
+  const labels: Record<TicketLock["status"], string> = {
+    active: "活跃锁票",
+    released: "已释放",
+    confirmed: "已确认",
+    expired: "已过期"
+  };
+  return labels[status] ?? status;
+}
+
+function isPaidOrderStatus(status: Order["status"]) {
+  return ["paid", "ready_to_visit", "verified"].includes(status);
 }
 
 export function listMerchants() {
@@ -526,6 +683,78 @@ export function recordMapProviderLog(provider: string, action: string, status: s
   `).run(provider, action, status, JSON.stringify(request ?? {}), JSON.stringify(response ?? {}), new Date().toISOString());
 }
 
+export function recordOperation(input: { scope?: OperationScope; type?: string; label?: string; metadata?: unknown }, actor?: AuthUser): OperationResult {
+  const label = input.label?.trim();
+  if (!label) throw new DomainError(400, "Operation label is required", "operation_label_required");
+  const type = input.type?.trim() || "ui.action";
+  const scope = input.scope ?? "visitor";
+  if (!["visitor", "admin", "merchant", "system"].includes(scope)) {
+    throw new DomainError(400, "Invalid operation scope", "operation_scope_invalid");
+  }
+
+  const id = createId("op");
+  const now = new Date().toISOString();
+  const status: OperationResult["status"] = isQueuedOperation(type) ? "queued" : "completed";
+  const message = operationMessage(label, type, status);
+  getDb().prepare(`
+    INSERT INTO operation_records
+      (id, scope, type, label, status, message, actor_user_id, metadata_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, scope, type, label, status, message, actor?.id ?? null, JSON.stringify(input.metadata ?? {}), now);
+  audit(actor, `operation.${type}`, "operation", id, "success", { scope, label, status });
+  return mapOperationRecord({
+    id,
+    scope,
+    type,
+    label,
+    status,
+    message,
+    actor_user_id: actor?.id,
+    metadata_json: JSON.stringify(input.metadata ?? {}),
+    created_at: now
+  });
+}
+
+export function getOperation(id: string) {
+  const row = getDb().prepare("SELECT * FROM operation_records WHERE id = ?").get(id) as OperationRecordRow | undefined;
+  if (!row) throw new DomainError(404, "Operation not found", "operation_not_found");
+  return mapOperationRecord(row);
+}
+
+export function renderOperationArtifact(id: string) {
+  const operation = getOperation(id);
+  const createdAt = operation.createdAt.replace("T", " ").slice(0, 19);
+  if (operation.type.includes("report")) {
+    return {
+      contentType: "text/markdown; charset=utf-8",
+      filename: `${operation.label.replace(/\s+/g, "-") || "operation-report"}.md`,
+      body: [
+        `# ${operation.label}`,
+        "",
+        `- 操作范围：${operation.scope}`,
+        `- 操作类型：${operation.type}`,
+        `- 处理状态：${operation.status}`,
+        `- 生成时间：${createdAt}`,
+        "",
+        operation.message,
+        "",
+        "本文件由本地演示后端生成，用于验证前端操作闭环。"
+      ].join("\n")
+    };
+  }
+
+  return {
+    contentType: "text/csv; charset=utf-8",
+    filename: `${operation.label.replace(/\s+/g, "-") || "operation-export"}.csv`,
+    body: [
+      "id,scope,type,label,status,createdAt",
+      [operation.id, operation.scope, operation.type, operation.label, operation.status, createdAt]
+        .map((value) => `"${String(value).replace(/"/g, "\"\"")}"`)
+        .join(",")
+    ].join("\n")
+  };
+}
+
 const sandboxTicketProvider: TicketProvider = {
   name: "sandbox",
   getOptions: getSandboxTicketOptions,
@@ -654,6 +883,67 @@ function mapVoucher(row: VoucherRow): TicketVoucher {
     verifiedBy: row.verified_by,
     createdAt: row.created_at
   };
+}
+
+function mapOperationRecord(row: OperationRecordRow): OperationResult {
+  const downloadUrl = row.type.includes("export") || row.type.includes("report")
+    ? `/api/operations/${encodeURIComponent(row.id)}/download`
+    : undefined;
+  return {
+    id: row.id,
+    scope: row.scope,
+    type: row.type,
+    label: row.label,
+    status: row.status,
+    message: row.message,
+    downloadUrl,
+    createdAt: row.created_at
+  };
+}
+
+function isQueuedOperation(type: string) {
+  return ["batch", "report", "export", "workflow.publish", "knowledge.reindex"].some((keyword) => type.includes(keyword));
+}
+
+function operationMessage(label: string, type: string, status: OperationResult["status"]) {
+  if (type.includes("export")) return `${label}已生成，可下载演示数据文件。`;
+  if (type.includes("report")) return `${label}已生成运营日报草稿。`;
+  if (type.includes("batch")) return `${label}已进入批量处理队列。`;
+  if (type.includes("workflow.publish")) return `${label}已发布到演示工作流配置。`;
+  if (type.includes("knowledge.reindex")) return `${label}已进入知识库索引重建队列。`;
+  if (type.includes("create")) return `${label}入口已打开，请继续补充信息。`;
+  if (type.includes("save")) return `${label}已保存为当前草稿。`;
+  if (type.includes("preview")) return `${label}已打开预览入口。`;
+  if (type.includes("merchant.marketing")) return "营销中心入口已打开，可继续配置优惠券、套餐或活动。";
+  if (type.includes("traffic.realtime")) return "实时客流视图已打开。";
+  if (type.includes("route.reorder")) return "路线已按当前模式重新排序。";
+  if (type.includes("favorite")) return "收藏状态已更新。";
+  if (type.includes("share")) return "分享面板已准备好。";
+  if (type.includes("voice") || type.includes("vision") || type.includes("guide") || type.includes("ar") || type.includes("immersive")) {
+    return `${label}入口已打开；当前不会调用真实设备或第三方服务。`;
+  }
+
+  const labelMessage = operationMessageForLabel(label);
+  if (labelMessage) return labelMessage;
+
+  return status === "queued" ? `${label}已进入处理队列。` : `${label}已处理完成。`;
+}
+
+function operationMessageForLabel(label: string) {
+  const normalized = label.replace(/\s+/g, "");
+  const serviceLabels = new Set(["卫生间", "停车场", "母婴室", "无障碍", "充电宝", "游客中心", "行李寄存", "直通车"]);
+  const assistantEntries = new Set(["行程规划", "景点导览", "票务预约", "酒店预订", "交通出行", "美食推荐"]);
+
+  if (normalized.includes("加入清单")) return "已加入行程清单，可在右侧清单查看。";
+  if (normalized === "清空") return "清单已清空。";
+  if (normalized.includes("编辑偏好") || normalized.includes("调整偏好")) return "偏好调整入口已打开。";
+  if (normalized === "预订") return "已加入待确认预订清单。";
+  if (normalized.includes("查看更多")) return "更多列表入口已打开。";
+  if (normalized.includes("热门景点")) return "已切换到热门景点视图。";
+  if (normalized.includes("夜游灯光秀")) return "已切换到夜游灯光秀视图。";
+  if (serviceLabels.has(normalized)) return `已在地图中标记${normalized}相关服务点。`;
+  if (assistantEntries.has(normalized)) return `${normalized}助手入口已打开。`;
+  return "";
 }
 
 function createId(prefix: string) {

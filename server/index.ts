@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import { join } from "node:path";
 import { URL } from "node:url";
-import type { City, Order, Poi, PoiCategory, Role } from "../src/types";
+import type { AiToolCall, City, GeneratedItineraryResponse, MapPoint, Order, Poi, PoiCategory, Role, RouteMode, TimelineItem } from "../src/types";
 import { authenticateRequest, clearSession, loginWithRole, requireAuth, setSessionCookie } from "./auth";
 import { initializeDatabase } from "./db";
 import { createMapProvider, type MapProvider, type MapProviderMeta, type PoiSearchInput, type RouteRequest } from "./mapProvider";
@@ -26,14 +26,16 @@ import {
   listReviews,
   lockTickets,
   recordMapProviderLog,
+  recordOperation,
   recordWebhook,
+  renderOperationArtifact,
   refundPayment,
   releaseTicketLock,
   syncMerchantInventory,
   verifyVoucher
 } from "./repositories";
 import { runTravelAgent } from "./travelAgent";
-import { DEFAULT_CITY_ID, DEFAULT_TICKET_DEMO_POI_ID } from "./config/city";
+import { DEFAULT_CITY_ID, DEFAULT_TICKET_DEMO_POI_ID, DEFAULT_TICKET_POI_NAME } from "./config/city";
 
 const root = process.cwd();
 loadLocalEnv(root);
@@ -108,20 +110,7 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === "POST" && url.pathname === "/api/itineraries/generate") {
       const body = await readBody<{ days?: number; preferences?: string[]; cityId?: string }>(request);
-      const cityId = body.cityId ?? DEFAULT_CITY_ID;
-      const candidates = pois.filter((poi) => poi.cityId === cityId).slice(0, 12);
-      sendJson(response, {
-        cityId,
-        days: Math.min(Math.max(body.days ?? 1, 1), 3),
-        preferences: body.preferences ?? ["少排队", "文化体验"],
-        items: candidates.slice(0, 6).map((poi, index) => ({
-          time: `${9 + index}:00`,
-          title: poi.name,
-          poiId: poi.id,
-          note: `${poi.category} · ${poi.suggestedDuration ?? "1-2 小时"}`
-        })),
-        sourceNote: "本接口基于真实 POI 候选生成演示行程；交通、天气、票务待后续官方接口接入。"
-      });
+      sendJson(response, await generateItineraryPlan(body));
       return;
     }
 
@@ -260,7 +249,12 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/admin/metrics") {
       const denied = requireAuth(auth, "admin:read");
       if (denied) return sendError(response, denied.status, denied.message);
-      sendJson(response, getAdminMetrics());
+      sendJson(response, getAdminMetrics({
+        keyword: url.searchParams.get("keyword") ?? undefined,
+        scenic: url.searchParams.get("scenic") ?? undefined,
+        status: url.searchParams.get("status") ?? undefined,
+        date: url.searchParams.get("date") ?? undefined
+      }));
       return;
     }
 
@@ -324,6 +318,19 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/operations") {
+      const body = await readBody<{ scope?: "visitor" | "admin" | "merchant" | "system"; type?: string; label?: string; metadata?: unknown }>(request);
+      sendJson(response, recordOperation(body, auth.user), 201);
+      return;
+    }
+
+    const operationDownloadMatch = url.pathname.match(/^\/api\/operations\/([^/]+)\/download$/);
+    if (request.method === "GET" && operationDownloadMatch) {
+      const artifact = renderOperationArtifact(decodeURIComponent(operationDownloadMatch[1]));
+      sendText(response, artifact.body, artifact.contentType, artifact.filename);
+      return;
+    }
+
     sendError(response, 404, "Route not found");
   } catch (error) {
     if (error instanceof DomainError) {
@@ -366,6 +373,82 @@ function unquoteEnvValue(value: string) {
   return commentIndex >= 0 ? trimmed.slice(0, commentIndex).trim() : trimmed;
 }
 
+async function generateItineraryPlan(input: { days?: number; preferences?: string[]; cityId?: string }): Promise<GeneratedItineraryResponse> {
+  const cityId = input.cityId ?? DEFAULT_CITY_ID;
+  const days = clampInteger(input.days ?? 3, 1, 5);
+  const preferences = normalizeItineraryPreferences(input.preferences);
+  const cityPois = pois.filter((poi) => poi.cityId === cityId);
+  const selectedPois = selectItineraryPois(cityPois, preferences, days * 3);
+  const routeResult = await loggedMapProvider.route({
+    cityId,
+    mode: walkingMode(preferences),
+    origin: pointFromPoi(selectedPois[0]),
+    destination: pointFromPoi(selectedPois[Math.min(selectedPois.length - 1, days * 2)]),
+    waypoints: selectedPois.slice(1, Math.min(selectedPois.length - 1, 5)).map(pointFromPoi).filter(isMapPoint),
+    preferences
+  });
+  const weatherResult = await loggedMapProvider.weather({ cityId });
+  const ticketOptions = getTicketOptions(DEFAULT_TICKET_DEMO_POI_ID);
+  const toolCalls: AiToolCall[] = [
+    {
+      name: "POI 候选编排",
+      status: selectedPois.length ? "success" : "failed",
+      summary: `从 ${cityPois.length} 个城市 POI 中按 ${preferences.join("、")} 选出 ${selectedPois.length} 个候选`
+    },
+    {
+      name: "路线约束",
+      status: routeResult.fallback ? "skipped" : "success",
+      summary: `${routeResult.mode} · ${routeResult.distanceMeters} 米 · 约 ${routeResult.durationMinutes} 分钟；provider：${routeResult.provider}${routeResult.fallback ? `；fallback：${routeResult.failureReason ?? "provider unavailable"}` : ""}`
+    },
+    {
+      name: "天气约束",
+      status: weatherResult.live ? "success" : "skipped",
+      summary: weatherResult.live ? `${weatherResult.summary ?? "已返回天气"}；provider：${weatherResult.provider}` : `未返回官方实时天气；${weatherResult.failureReason ?? "使用本地舒适天气假设"}`
+    },
+    {
+      name: "票务候选",
+      status: ticketOptions.products.length && ticketOptions.slots.length ? "success" : "skipped",
+      summary: `${DEFAULT_TICKET_POI_NAME} sandbox 候选 ${ticketOptions.products.length} 类票、${ticketOptions.slots.length} 个时段；非官方实时库存或支付结果`
+    }
+  ];
+  const totalPerPerson = 1600 + days * 360 + (preferences.includes("挑战") ? 120 : 0);
+
+  return {
+    cityId,
+    days,
+    nights: Math.max(days - 1, 0),
+    title: `${cityName(cityId)} ${days}日${Math.max(days - 1, 0)}晚 ${itineraryTheme(preferences)}`,
+    preferences,
+    summary: [
+      `可步行比例 ${walkingRatio(preferences)}%`,
+      `热门点错峰 ${Math.min(days + 1, selectedPois.length)} 处`,
+      `亲子休息点 ${preferences.includes("亲子游") ? days + 2 : days} 个`,
+      `票务可预约 ${ticketOptions.products.length} 项`
+    ],
+    reasons: buildItineraryReasons(selectedPois, preferences),
+    constraints: [
+      { label: "出行天数", value: `${days}天`, status: "通过", tone: "green" },
+      { label: "预算", value: `约 ￥${totalPerPerson.toLocaleString()} / 人`, status: totalPerPerson <= 3000 ? "通过" : "提醒", tone: totalPerPerson <= 3000 ? "green" : "orange" },
+      { label: "同行", value: "2 位成人 · 1 位儿童", status: "通过", tone: "green" },
+      { label: "步行强度", value: preferences.find((item) => ["轻松", "适中", "挑战"].includes(item)) ?? "适中", status: "通过", tone: "green" },
+      { label: "数据来源", value: "真实 POI + 地图/票务工具", status: "通过", tone: "green" }
+    ],
+    budget: {
+      totalPerPerson,
+      days,
+      breakdown: [
+        { name: "住宿", value: 44, fill: "#6fa88a" },
+        { name: "门票", value: 24, fill: "#d8b96a" },
+        { name: "餐饮", value: 20, fill: "#c9975d" },
+        { name: "交通", value: 12, fill: "#7ba7c8" }
+      ]
+    },
+    items: buildItineraryItems(selectedPois, days, preferences, weatherResult.summary, cityId),
+    sourceNote: `服务端 Itinerary Agent 已编排 POI、路线、天气和 sandbox 票务候选；${routeResult.fallback || !weatherResult.live ? "部分工具为 fallback，" : ""}易变信息以官方渠道为准。`,
+    toolCalls
+  };
+}
+
 function searchPois(url: URL) {
   const keyword = url.searchParams.get("keyword")?.trim().toLowerCase() ?? "";
   const cityId = url.searchParams.get("cityId") ?? DEFAULT_CITY_ID;
@@ -381,6 +464,164 @@ function searchPois(url: URL) {
     })
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
     .slice(0, limit);
+}
+
+function clampInteger(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+function normalizeItineraryPreferences(preferences: string[] | undefined) {
+  const normalized = (preferences?.length ? preferences : ["历史文化", "亲子游", "适中"])
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return Array.from(new Set(normalized));
+}
+
+function selectItineraryPois(cityPois: Poi[], preferences: string[], limit: number) {
+  const preferred = cityPois
+    .map((poi) => ({ poi, score: scoreItineraryPoi(poi, preferences) }))
+    .sort((left, right) => right.score - left.score || (right.poi.rating ?? 0) - (left.poi.rating ?? 0))
+    .map((entry) => entry.poi);
+  const firstPass = diversifyPois(preferred, limit);
+  if (firstPass.length >= limit) return firstPass;
+  const used = new Set(firstPass.map((poi) => poi.id));
+  return [...firstPass, ...preferred.filter((poi) => !used.has(poi.id))].slice(0, limit);
+}
+
+function scoreItineraryPoi(poi: Poi, preferences: string[]) {
+  const text = normalizeSearchText([poi.name, poi.category, poi.address, poi.description, poi.suitableFor, ...poi.tags]);
+  const ratingScore = Math.round((poi.rating ?? 4) * 10);
+  const preferenceScore = preferences.reduce((score, preference) => {
+    const keyword = normalizeSearchText([preference]);
+    if (text.includes(keyword)) return score + 18;
+    if (preference.includes("历史") && /历史|文化|博物馆|遗迹|名胜/.test(text)) return score + 14;
+    if (preference.includes("亲子") && /亲子|儿童|家庭|动物园|公园/.test(text)) return score + 14;
+    if (preference.includes("美食") && /美食|餐饮|小吃|咖啡|餐厅/.test(text)) return score + 14;
+    if (preference.includes("自然") && /自然|公园|江滩|湖|风景/.test(text)) return score + 12;
+    return score;
+  }, 0);
+  const categoryScore = poi.category === "景点" || poi.category === "文化艺术" ? 10 : poi.category === "美食" ? 7 : 4;
+  return ratingScore + preferenceScore + categoryScore;
+}
+
+function diversifyPois(candidates: Poi[], limit: number) {
+  const result: Poi[] = [];
+  const categoryCounts = new Map<string, number>();
+  candidates.forEach((poi) => {
+    if (result.length >= limit) return;
+    const count = categoryCounts.get(poi.category) ?? 0;
+    if (count >= Math.max(2, Math.ceil(limit / 4))) return;
+    result.push(poi);
+    categoryCounts.set(poi.category, count + 1);
+  });
+  return result;
+}
+
+function buildItineraryItems(selectedPois: Poi[], days: number, preferences: string[], weatherSummary: string | undefined, cityId: string) {
+  const slots = ["09:30-11:00", "11:20-12:20", "13:50-15:20"];
+  const items: GeneratedItineraryResponse["items"] = [];
+  for (let dayIndex = 0; dayIndex < days; dayIndex += 1) {
+    const day = `Day ${dayIndex + 1}`;
+    items.push({
+      day,
+      time: "09:00",
+      title: dayIndex === 0 ? "酒店出发" : "酒店出发 / 当日路线确认",
+      subtitle: `${cityName(cityId)}当日行程由服务端 Agent 根据偏好、天气、路线和票务候选生成。`,
+      type: "hotel",
+      tags: ["Agent生成", preferences.includes("亲子游") ? "亲子节奏" : "同行偏好"],
+      meta: weatherSummary ?? "天气待确认",
+      traffic: walkingMode(preferences) === "walking" ? "步行优先" : "交通优先"
+    });
+
+    selectedPois.slice(dayIndex * 3, dayIndex * 3 + 3).forEach((poi, slotIndex) => {
+      items.push(itineraryItemFromPoi(poi, day, slots[slotIndex] ?? `${10 + slotIndex}:00`, slotIndex, preferences));
+    });
+  }
+  return items;
+}
+
+function itineraryItemFromPoi(poi: Poi, day: string, time: string, index: number, preferences: string[]): GeneratedItineraryResponse["items"][number] {
+  const type = timelineTypeFromPoi(poi);
+  return {
+    day,
+    time,
+    title: poi.name,
+    subtitle: itinerarySubtitle(poi, index, preferences),
+    image: poi.cover,
+    type,
+    tags: uniqueStrings([poi.category, ...poi.tags]).slice(0, 3),
+    meta: poi.suggestedDuration ?? (type === "food" ? "60分钟" : "90分钟"),
+    open: compactOpeningHours(poi.openingHours),
+    traffic: index === 0 ? "错峰优先" : "顺路衔接",
+    poiId: poi.id,
+    note: `${poi.category} · ${poi.address ?? "地址待确认"}`
+  };
+}
+
+function itinerarySubtitle(poi: Poi, index: number, preferences: string[]) {
+  const base = poi.description || poi.address || "基于真实 POI 候选纳入当日路线。";
+  const prefix = index === 0 ? "上午优先安排，降低热门时段排队风险" : index === 1 ? "保留休息与换乘缓冲" : "下午衔接同区域点位";
+  const preference = preferences.includes("亲子游") ? "，兼顾亲子节奏" : preferences.includes("美食体验") ? "，兼顾本地体验" : "";
+  return `${prefix}${preference}。${base}`.slice(0, 82);
+}
+
+function timelineTypeFromPoi(poi: Poi): TimelineItem["type"] {
+  if (poi.category === "美食") return "food";
+  return "spot";
+}
+
+function compactOpeningHours(openingHours: string | undefined) {
+  if (!openingHours) return undefined;
+  return openingHours.replace(/\s+/g, " ").slice(0, 22);
+}
+
+function buildItineraryReasons(selectedPois: Poi[], preferences: string[]) {
+  const topNames = selectedPois.slice(0, 3).map((poi) => poi.name).join("、") || "核心点位";
+  return [
+    `${topNames} 等候选来自真实 POI 数据集，优先匹配 ${preferences.join("、")}`,
+    "按上午热门点、午间休息点、下午同区域衔接组织节奏",
+    "结合地图路线与天气工具状态生成，不把 fallback 当作官方实时结论",
+    "黄鹤楼票务只展示 sandbox 候选，不宣称真实库存或支付成功"
+  ];
+}
+
+function itineraryTheme(preferences: string[]) {
+  if (preferences.includes("亲子游")) return "亲子文化深度游";
+  if (preferences.includes("美食体验")) return "江城美食文化游";
+  if (preferences.includes("自然风光")) return "城市风光慢游";
+  return "文化深度游";
+}
+
+function walkingRatio(preferences: string[]) {
+  if (preferences.includes("轻松")) return 72;
+  if (preferences.includes("挑战")) return 58;
+  return 64;
+}
+
+function walkingMode(preferences: string[]): RouteMode {
+  return preferences.includes("挑战") ? "walking" : "transit";
+}
+
+function cityName(cityId: string) {
+  return cityDoc.cities.find((city) => city.id === cityId)?.name ?? "武汉";
+}
+
+function pointFromPoi(poi: Poi | undefined): MapPoint | undefined {
+  if (!poi) return undefined;
+  return { name: poi.name, lng: poi.lng, lat: poi.lat };
+}
+
+function isMapPoint(point: MapPoint | undefined): point is MapPoint {
+  return Boolean(point);
+}
+
+function normalizeSearchText(values: Array<string | undefined>) {
+  return values.filter(Boolean).join(" ").toLowerCase();
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
 }
 
 function mapSearchInput(url: URL): PoiSearchInput {
@@ -438,6 +679,13 @@ function setCors(request: IncomingMessage, response: ServerResponse) {
 function sendJson(response: ServerResponse, data: unknown, status = 200) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(data));
+}
+
+function sendText(response: ServerResponse, body: string, contentType: string, filename?: string, status = 200) {
+  const headers: Record<string, string> = { "Content-Type": contentType };
+  if (filename) headers["Content-Disposition"] = `attachment; filename="${filename.replace(/"/g, "")}"`;
+  response.writeHead(status, headers);
+  response.end(body);
 }
 
 function sendError(response: ServerResponse, status: number, message: string, code = "error") {

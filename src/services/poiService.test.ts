@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getFeaturedPois, poiToScenicSpot, searchPois } from "./poiService";
+import { filterRecommendedPois, getFeaturedPois, poiToScenicSpot, recommendationFilters, searchPois } from "./poiService";
 
 describe("poiService", () => {
   it("searches real Wuhan POI fallback by keyword", () => {
@@ -14,5 +14,20 @@ describe("poiService", () => {
     expect(card.name).toBe(poi.name);
     expect(card.image).toBeTruthy();
     expect(card.reason).toContain("真实");
+  });
+
+  it("filters recommendations by user intent", () => {
+    const pois = searchPois({ cityId: "wuhan", limit: 30 });
+    const allNames = filterRecommendedPois(pois, "全部推荐").map((poi) => poi.name);
+
+    for (const filter of recommendationFilters) {
+      expect(filterRecommendedPois(pois, filter).length, filter).toBeGreaterThan(0);
+    }
+
+    expect(filterRecommendedPois(pois, "美食").every((poi) => poi.category === "美食")).toBe(true);
+    expect(filterRecommendedPois(pois, "少排队").every((poi) => ["较少", "舒适"].includes(poiToScenicSpot(poi).crowd))).toBe(true);
+    expect(filterRecommendedPois(pois, "夜游").some((poi) => poi.category === "夜生活")).toBe(true);
+    expect(filterRecommendedPois(pois, "适合带娃").some((poi) => poi.category === "亲子游")).toBe(true);
+    expect(filterRecommendedPois(pois, "Citywalk").map((poi) => poi.name)).not.toEqual(allNames);
   });
 });

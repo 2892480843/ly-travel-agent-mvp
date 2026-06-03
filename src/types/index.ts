@@ -35,6 +35,31 @@ export type TimelineItem = {
   traffic?: string;
 };
 
+export type GeneratedItineraryItem = TimelineItem & {
+  day: string;
+  poiId?: string;
+  note?: string;
+};
+
+export type GeneratedItineraryResponse = {
+  cityId: string;
+  days: number;
+  nights: number;
+  title: string;
+  preferences: string[];
+  summary: string[];
+  reasons: string[];
+  constraints: Array<{ label: string; value: string; status: "通过" | "提醒"; tone: StatusTone }>;
+  budget: {
+    totalPerPerson: number;
+    days: number;
+    breakdown: Array<{ name: string; value: number; fill: string }>;
+  };
+  items: GeneratedItineraryItem[];
+  sourceNote: string;
+  toolCalls: AiToolCall[];
+};
+
 export type MetricItem = {
   label: string;
   value: string;
@@ -264,6 +289,28 @@ export type AdminMetrics = {
   kpis: MetricItem[];
   alerts: Array<{ title: string; desc: string; level: "高" | "中" | "低" }>;
   hotspots: string[][];
+  scopeLabel?: string;
+  sourceNote?: string;
+};
+
+export type AdminMetricsFilter = {
+  keyword?: string;
+  scenic?: string;
+  status?: string;
+  date?: string;
+};
+
+export type OperationScope = "visitor" | "admin" | "merchant" | "system";
+
+export type OperationResult = {
+  id: string;
+  scope: OperationScope;
+  type: string;
+  label: string;
+  status: "completed" | "queued";
+  message: string;
+  downloadUrl?: string;
+  createdAt: string;
 };
 
 export type Role = "visitor" | "operator" | "reviewer" | "merchant" | "admin";

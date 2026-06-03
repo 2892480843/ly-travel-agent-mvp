@@ -7,10 +7,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
-  Languages,
   Loader2,
   MapPin,
-  MessageSquareText,
   Mic,
   Navigation,
   QrCode,
@@ -28,8 +26,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Funnel,
-  FunnelChart,
   Line,
   LineChart,
   Pie,
@@ -43,6 +39,7 @@ import type { AiResponse, MapPoint, MetricItem, Poi, RouteResult, ScenicSpot, St
 import { channelData, spotImages, trafficData, workflowNodes } from "../data/mockData";
 import { DEFAULT_CITY_CENTER, DEFAULT_CITY_NAME, DEFAULT_TICKET_POI_NAME, DEFAULT_TICKET_ROUTE } from "../config/city";
 import { askTravelAssistant } from "../services/aiService";
+import { triggerOperation } from "../services/operationService";
 
 export function StatusTag({ children, tone = "blue" }: { children: ReactNode; tone?: StatusTone }) {
   return <span className={`tag ${tone}`}>{children}</span>;
@@ -139,15 +136,17 @@ export function ChartCard({
   title,
   subtitle,
   children,
-  action
+  action,
+  className = ""
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="card card-pad chart-card">
+    <section className={`card card-pad chart-card ${className}`.trim()}>
       <div className="section-title">
         <div>
           <h2>{title}</h2>
@@ -198,8 +197,8 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
           <strong>{item.time}</strong>
           <motion.div className="card itinerary-card" whileHover={shouldReduceMotion ? undefined : { x: 3 }}>
             {item.image ? <img src={item.image} className="thumb" alt={item.title} /> : <div className="thumb placeholder"><Navigation size={24} /></div>}
-            <div>
-              <div className="spot-head">
+            <div className="itinerary-card-body">
+              <div className="itinerary-card-head">
                 <h3>{item.title}</h3>
                 <StatusTag tone={item.type === "food" ? "orange" : item.type === "traffic" ? "green" : "blue"}>{item.meta}</StatusTag>
               </div>
@@ -217,15 +216,27 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
   );
 }
 
-const quickQuestions = ["武汉一日游，带老人，少排队", "帮我预约黄鹤楼上午票", "推荐武汉周边亲子景点", "武汉最近有什么活动？"];
-
 type ChatMessage = {
   role: "user" | "ai";
   text: string;
   result?: AiResponse;
 };
 
-export function AIChat() {
+export type AIChatPromptRequest = {
+  id: number;
+  text: string;
+  autoSubmit?: boolean;
+};
+
+export function AIChat({
+  onResult,
+  promptRequest,
+  onPromptRequestConsumed
+}: {
+  onResult?: (result: AiResponse, prompt: string) => void;
+  promptRequest?: AIChatPromptRequest;
+  onPromptRequestConsumed?: () => void;
+} = {}) {
   const shouldReduceMotion = useReducedMotion();
   const chatRef = useRef<HTMLDivElement | null>(null);
   const [input, setInput] = useState("");
@@ -270,6 +281,7 @@ export function AIChat() {
     setLoading(true);
     try {
       const result = await askTravelAssistant(clean);
+      onResult?.(result, clean);
       setMessages((prev) => [...prev, { role: "ai", text: result.text, result }]);
     } catch {
       const fallback = "服务暂时不可用，已保留你的问题。建议先查看推荐页或票务页继续演示。";
@@ -279,28 +291,53 @@ export function AIChat() {
     }
   };
 
+  const activateDemoTool = (label: "语音输入" | "拍照识别") => {
+    if (label === "语音输入") {
+      setInput("请帮我规划一条少排队的黄鹤楼游览路线");
+    } else {
+      const result: AiResponse = {
+        text: "已识别示例图片为黄鹤楼相关场景，可继续询问票务、路线或讲解内容。",
+        cards: [{ id: "vision-demo-yellow-crane", title: "黄鹤楼识别结果", subtitle: "拍照识别为演示能力，未上传真实图片", href: "/spot/yellow-crane-tower", actionLabel: "查看详情" }],
+        toolCalls: [{ name: "拍照识别", status: "success", summary: "返回本地演示识别结果" }],
+        confidence: 0.72,
+        sourceNote: "当前仅使用本地示例识别说明，不代表真实图像识别或第三方视觉服务结果。"
+      };
+      onResult?.(result, label);
+      setMessages((prev) => [...prev, {
+        role: "ai",
+        text: result.text,
+        result
+      }]);
+    }
+    triggerOperation({ scope: "visitor", type: label === "语音输入" ? "voice.demo" : "vision.demo", label });
+  };
+
+  useEffect(() => {
+    if (!promptRequest) return;
+    setInput(promptRequest.text);
+    if (promptRequest.autoSubmit) {
+      void submit(promptRequest.text);
+    }
+    onPromptRequestConsumed?.();
+    // submit intentionally reads the latest loading state; prompt ids prevent repeats.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promptRequest?.id]);
+
+  useEffect(() => {
+    const initialResult = [...messages].reverse().find((message) => message.role === "ai" && message.result)?.result;
+    if (initialResult) {
+      onResult?.(initialResult, "initial-demo");
+    }
+    // Only publish the seeded demo state once for the surrounding page chrome.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" });
   }, [messages.length, loading, shouldReduceMotion]);
 
   return (
     <div className="card card-pad chat-shell">
-      <div className="chat-toolbar">
-        <div className="chat-mode-tabs" aria-label="助手能力入口">
-          {([
-            ["文本提问", MessageSquareText],
-            ["语音问路", Mic],
-            ["拍照识别", Camera],
-            ["菜单翻译", Languages]
-          ] as const).map(([label, Icon], index) => (
-            <span className={`chat-mode-tab${index === 0 ? " is-active" : ""}`} key={label}>
-              <Icon size={16} />
-              {label}
-            </span>
-          ))}
-        </div>
-        <span className="chat-toolbar-note"><ShieldCheck size={14} /> 内容由 AI 生成，关键票务以官方为准</span>
-      </div>
       <div className="chat" ref={chatRef} aria-label="AI 对话记录">
         {messages.map((message, index) => (
           <motion.div
@@ -377,17 +414,12 @@ export function AIChat() {
           </motion.div>
         ) : null}
       </div>
-      <div className="quick-row chat-quick-row">
-        {quickQuestions.map((question) => (
-          <button key={question} className="chip" onClick={() => submit(question)}>{question}</button>
-        ))}
-      </div>
       <div className="search-pill compact-input chat-composer">
         <span className="chat-composer-icon"><Bot size={18} /></span>
         <textarea
           aria-label="输入旅行助手问题"
-          placeholder="请输入你的问题，也可以试试拍照识别、语音问路..."
-          rows={2}
+          placeholder="请输入你的问题..."
+          rows={1}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
@@ -398,8 +430,8 @@ export function AIChat() {
           }}
         />
         <div className="chat-composer-tools" aria-label="输入辅助">
-          <button className="chat-tool-btn" type="button" aria-label="语音输入"><Mic size={17} /></button>
-          <button className="chat-tool-btn" type="button" aria-label="拍照识别"><Camera size={17} /></button>
+          <button className="chat-tool-btn" type="button" aria-label="语音输入" onClick={() => activateDemoTool("语音输入")}><Mic size={17} /></button>
+          <button className="chat-tool-btn" type="button" aria-label="拍照识别" onClick={() => activateDemoTool("拍照识别")}><Camera size={17} /></button>
         </div>
         <button className="icon-btn" aria-label="发送问题" disabled={loading || !input.trim()} onClick={() => void submit()}><Send size={18} /></button>
       </div>
@@ -452,31 +484,57 @@ export function TrafficChart({ type = "line" }: { type?: "line" | "area" | "bar"
 
 export function FunnelPanel() {
   const totalValue = channelData[0]?.value ?? 0;
+  const rows = channelData.map((entry, index) => {
+    const previousValue = channelData[index - 1]?.value;
+    const stepRateValue = previousValue ? (entry.value / previousValue) * 100 : 100;
+    const retentionRateValue = totalValue ? (entry.value / totalValue) * 100 : 0;
+    const dropRateValue = previousValue ? 100 - stepRateValue : 0;
+    return {
+      ...entry,
+      index,
+      conversionRate: `${stepRateValue.toFixed(2)}%`,
+      dropRate: `${Math.max(dropRateValue, 0).toFixed(2)}%`,
+      retentionRate: `${retentionRateValue.toFixed(2)}%`,
+      retentionWidth: `${Math.max(retentionRateValue, 3).toFixed(2)}%`
+    };
+  });
+  const lastRow = rows.at(-1);
+  const finalRate = lastRow?.retentionRate ?? "0.00%";
 
   return (
-    <div className="funnel-panel">
-      {channelData.map((entry, index) => {
-        const previousValue = channelData[index - 1]?.value;
-        const conversionRate = previousValue ? `${((entry.value / previousValue) * 100).toFixed(2)}%` : "100.00%";
-        const retentionRate = totalValue ? Math.max((entry.value / totalValue) * 100, 8) : 0;
-
-        return (
+    <div className="funnel-panel conversion-funnel-panel">
+      <div className="conversion-funnel-summary" aria-label="预约到游览转化总览">
+        <span>最终转化率</span>
+        <strong>{finalRate}</strong>
+        <small>
+          {totalValue.toLocaleString()} 访问中，{(lastRow?.value ?? 0).toLocaleString()} 完成二次消费
+        </small>
+      </div>
+      <div className="conversion-funnel-steps" aria-label="转化步骤明细">
+        {rows.map((entry) => (
           <article
-            className="funnel-step"
+            className="conversion-funnel-step"
             key={entry.name}
-            style={{ "--fill": entry.fill, "--progress": `${retentionRate}%` } as CSSProperties}
+            style={{ "--fill": entry.fill, "--bar": entry.retentionWidth } as CSSProperties}
           >
-            <span className="funnel-index">{String(index + 1).padStart(2, "0")}</span>
-            <div className="funnel-copy">
-              <span>{entry.name}</span>
-              <small>{index === 0 ? "总访问基数" : `较上一步 ${conversionRate}`}</small>
+            <div className="conversion-step-head">
+              <span className="conversion-funnel-index">{String(entry.index + 1).padStart(2, "0")}</span>
+              <span className="conversion-funnel-copy">
+                <strong>{entry.name}</strong>
+                <small>总量留存 {entry.retentionRate}</small>
+              </span>
+              <b>{entry.value.toLocaleString()}</b>
             </div>
-            <strong>{entry.value.toLocaleString()}</strong>
-            <em>{conversionRate}</em>
-            <div className="funnel-meter" aria-hidden="true"><i /></div>
+            <div className="conversion-step-track" aria-hidden="true">
+              <span />
+            </div>
+            <div className="conversion-step-foot">
+              <span>{entry.index === 0 ? "总访问基数" : `较上一步 ${entry.conversionRate}`}</span>
+              <em>{entry.index === 0 ? "起点阶段" : `流失 ${entry.dropRate}`}</em>
+            </div>
           </article>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
@@ -729,7 +787,7 @@ export function OrderCard({ order }: { order: { id: string; title: string; statu
       </div>
       <div className="order-card-action">
         <b>￥{order.amount}</b>
-        <button className="ghost-btn">查看凭证</button>
+        <a className="ghost-btn" href="/ticket/detail">查看凭证</a>
       </div>
     </article>
   );
@@ -854,27 +912,55 @@ export function ReviewTable({
   rows,
   columns,
   action = "查看",
-  onAction
+  onAction,
+  getRowKey,
+  selectedRowKeys,
+  onRowCheckedChange,
+  onAllCheckedChange
 }: {
   rows: string[][];
   columns: string[];
   action?: string;
   onAction?: (row: string[], index: number) => void;
+  getRowKey?: (row: string[], index: number) => string;
+  selectedRowKeys?: string[];
+  onRowCheckedChange?: (row: string[], index: number, checked: boolean) => void;
+  onAllCheckedChange?: (checked: boolean, rows: string[][]) => void;
 }) {
+  const controlledSelection = Array.isArray(selectedRowKeys);
+  const rowKeyFor = (row: string[], index: number) => getRowKey?.(row, index) ?? `${row[0]}-${index}`;
+  const allVisibleSelected = controlledSelection && rows.length > 0 && rows.every((row, index) => selectedRowKeys.includes(rowKeyFor(row, index)));
   return (
     <div className="table-wrap">
       <table className="table">
         <thead>
           <tr>
-            <th><input type="checkbox" /></th>
+            <th>
+              <input
+                type="checkbox"
+                checked={controlledSelection ? allVisibleSelected : undefined}
+                onChange={controlledSelection ? (event) => onAllCheckedChange?.(event.target.checked, rows) : undefined}
+              />
+            </th>
             {columns.map((column) => <th key={column}>{column}</th>)}
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length + 2} className="muted">暂无匹配数据</td>
+            </tr>
+          ) : rows.map((row, index) => (
             <tr key={`${row[0]}-${index}`}>
-              <td><input type="checkbox" defaultChecked={index === 0} /></td>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={controlledSelection ? selectedRowKeys.includes(rowKeyFor(row, index)) : undefined}
+                  defaultChecked={controlledSelection ? undefined : index === 0}
+                  onChange={controlledSelection ? (event) => onRowCheckedChange?.(row, index, event.target.checked) : undefined}
+                />
+              </td>
               {row.map((cell, cellIndex) => (
                 <td key={`${cell}-${cellIndex}`}>
                   {cellIndex === row.length - 1 && ["已通过", "已发布", "营业中"].some((value) => cell.includes(value)) ? <StatusTag tone="green">{cell}</StatusTag> :

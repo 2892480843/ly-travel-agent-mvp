@@ -3,9 +3,11 @@ import { closeDb, getDb, initializeDatabase } from "./db";
 import {
   createOrder,
   createPayment,
+  getAdminMetrics,
   getOrder,
   getTicketOptions,
   lockTickets,
+  recordOperation,
   recordWebhook,
   type AuthUser
 } from "./repositories";
@@ -62,5 +64,39 @@ describe("repositories sandbox payment and ticket flow", () => {
     expect(finalOrder.voucherCode).toBeTruthy();
     expect(paymentEventCount).toBe(1);
     expect(voucherCount).toBe(1);
+  });
+
+  it("scopes admin metrics by scenic spot and review status", () => {
+    const metrics = getAdminMetrics({ scenic: "黄鹤楼", status: "待审核" });
+    const reviewMetric = metrics.kpis.find((item) => item.label === "待审核");
+    const orderMetric = metrics.kpis.find((item) => item.label === "订单总数");
+
+    expect(metrics.scopeLabel).toContain("黄鹤楼");
+    expect(reviewMetric?.value).toBe("1");
+    expect(orderMetric?.value).toBe("0");
+    expect(metrics.sourceNote).toContain("orders");
+  });
+
+  it("scopes admin metrics by active ticket locks", () => {
+    const options = getTicketOptions("ticket-yellow-crane-tower-demo", "2026-06-06");
+    const product = options.products[0]!;
+    const slot = options.slots[0]!;
+    lockTickets({ productId: product.id, slotId: slot.id, visitDate: "2026-06-06", quantity: 1 }, visitor);
+
+    const metrics = getAdminMetrics({ scenic: "黄鹤楼", status: "活跃锁票", date: "2026-06-06" });
+    const lockMetric = metrics.kpis.find((item) => item.label === "活跃锁票");
+
+    expect(metrics.scopeLabel).toBe("全部关键词 / 黄鹤楼 / 活跃锁票 / 2026-06-06");
+    expect(lockMetric?.value).toBe("1");
+  });
+
+  it("returns specific operation messages instead of generic demo copy", () => {
+    const addToList = recordOperation({ scope: "visitor", type: "ui.action", label: "加入清单" }, visitor);
+    const audioGuide = recordOperation({ scope: "visitor", type: "guide.audio", label: "语音讲解" }, visitor);
+
+    expect(addToList.message).toBe("已加入行程清单，可在右侧清单查看。");
+    expect(audioGuide.message).toBe("语音讲解入口已打开；当前不会调用真实设备或第三方服务。");
+    expect(addToList.message).not.toContain("演示操作");
+    expect(audioGuide.message).not.toContain("演示链路");
   });
 });
