@@ -58,7 +58,34 @@ npm run readiness:prod
 
 生产模式会将默认或弱 `AUTH_SESSION_SECRET`、sandbox 支付/票务、缺失真实 provider 密钥、API 不可访问等判定为失败项。服务端启动时如果 `NODE_ENV`、`APP_ENV`、`LY_ENV` 或 `READINESS_MODE` 为 `production`，也会执行生产配置 fail fast。
 
-## 启动
+## 一键部署（生产）
+
+后端进程会自动托管 `dist/` 前端构建产物（同源 `/api`，SPA 路由回退），因此**只需一个进程、一个端口**（默认 `PORT=8787`），无须额外 Nginx。进程由 PM2 守护（崩溃自动重启、开机自启可配）。
+
+```bash
+# 演示态生产部署（允许 sandbox 支付/票务，适合当前 MVP 上线演示）
+npm run deploy
+
+# 严格生产部署（readiness:prod 阻断式校验 + NODE_ENV=production fail-fast：
+# 要求强 AUTH_SESSION_SECRET、真实支付/票务 provider，否则拒绝启动）
+npm run deploy:prod
+```
+
+`deploy` 等价于：`npm ci` → 双端构建（`build:all`）→ readiness 检查 → `pm2 startOrReload ecosystem.config.cjs` → `pm2 save`。
+
+部署后自检：
+
+```bash
+curl http://localhost:8787/api/health   # API 与 providers 状态
+curl -I http://localhost:8787/          # 前端页面（200 + text/html）
+npx pm2 status                          # 进程状态；日志：npx pm2 logs ly-travel-agent
+```
+
+更新发布 = 重新执行同一条 `npm run deploy`（startOrReload 平滑重载）。开机自启：`npx pm2 startup` 按提示执行后再 `npx pm2 save`（Windows 可改用 `npm i -g pm2-windows-startup && pm2-startup install`）。
+
+> 提示：`.env` 不入库，部署机需自行放置（参考 `.env.example`）；公网只需开放/映射 `PORT` 一个端口。
+
+## 启动（开发）
 
 ```bash
 npm run dev:server

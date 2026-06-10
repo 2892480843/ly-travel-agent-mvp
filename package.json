@@ -11,6 +11,10 @@
     "secret:generate": "node scripts/generate-secret.mjs",
     "build": "tsc -b && vite build",
     "build:server": "tsc -p tsconfig.server.json",
+    "build:all": "npm run build:server && npm run build",
+    "start": "node server-dist/server/index.js",
+    "deploy": "npm ci && npm run build:all && npm run readiness && npx pm2 startOrReload ecosystem.config.cjs && npx pm2 save",
+    "deploy:prod": "npm ci && npm run build:all && npm run readiness:prod && npx pm2 startOrReload ecosystem.config.cjs --env production && npx pm2 save",
     "test": "vitest run",
     "preview": "vite preview"
   },

@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
-import { join } from "node:path";
+import { extname, join, normalize } from "node:path";
 import { URL } from "node:url";
 import type { AiToolCall, City, GeneratedItineraryResponse, MapPoint, Order, Poi, PoiCategory, Role, RouteMode, TimelineItem } from "../src/types";
 import { authenticateRequest, clearSession, loginWithRole, requireAuth, setSessionCookie } from "./auth";
@@ -68,6 +68,12 @@ const server = http.createServer(async (request, response) => {
 
   try {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+
+    // Production single-process mode: serve the built frontend (dist/) from
+    // the same origin so /api needs no extra proxy. No-op when dist is absent
+    // (development uses the Vite dev server instead).
+    if (tryServeStatic(request, response, url)) return;
+
     const auth = authenticateRequest(request);
 
     if (request.method === "GET" && url.pathname === "/api/health") {
@@ -419,6 +425,54 @@ server.on("error", (error: NodeJS.ErrnoException) => {
 
 function readJson<T>(relativePath: string): T {
   return JSON.parse(readFileSync(join(root, relativePath), "utf8")) as T;
+}
+
+const distDir = join(root, "dist");
+const hasStaticBundle = existsSync(join(distDir, "index.html"));
+
+const STATIC_MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".map": "application/json",
+  ".txt": "text/plain; charset=utf-8"
+};
+
+function tryServeStatic(request: IncomingMessage, response: ServerResponse, url: URL): boolean {
+  if (!hasStaticBundle) return false;
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return false;
+
+  const decoded = decodeURIComponent(url.pathname);
+  const safeRelative = normalize(decoded).replace(/^([/\\])+/, "");
+  let filePath = safeRelative ? join(distDir, safeRelative) : join(distDir, "index.html");
+  if (!filePath.startsWith(distDir)) return false; // path traversal guard
+  if (!existsSync(filePath) || statSync(filePath).isDirectory()) {
+    // SPA history fallback: unknown routes render the app shell.
+    filePath = join(distDir, "index.html");
+  }
+
+  const extension = extname(filePath).toLowerCase();
+  const body = readFileSync(filePath);
+  response.writeHead(200, {
+    "Content-Type": STATIC_MIME[extension] ?? "application/octet-stream",
+    // Vite emits content-hashed asset filenames; html must stay fresh.
+    "Cache-Control": extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable"
+  });
+  response.end(request.method === "HEAD" ? undefined : body);
+  return true;
 }
 
 function loadLocalEnv(cwd: string) {
