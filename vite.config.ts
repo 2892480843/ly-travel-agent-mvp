@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: "0.0.0.0",
+      allowedHosts: ["stand-genesis-meals-ant.trycloudflare.com"],
       proxy: {
         "/api": {
           target: apiTarget,

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDb, getDb, initializeDatabase } from "./db";
+import { todayISO } from "./demoDates";
 import {
   createOrder,
   createPayment,
@@ -32,10 +33,11 @@ describe("repositories sandbox payment and ticket flow", () => {
   });
 
   it("keeps sandbox lock to order to payment flow idempotent for duplicate webhook events", () => {
-    const options = getTicketOptions("ticket-yellow-crane-tower-demo", "2026-06-06");
+    const visitDate = todayISO();
+    const options = getTicketOptions("ticket-yellow-crane-tower-demo", visitDate);
     const product = options.products[0]!;
     const slot = options.slots[0]!;
-    const lock = lockTickets({ productId: product.id, slotId: slot.id, visitDate: "2026-06-06", quantity: 1 }, visitor);
+    const lock = lockTickets({ productId: product.id, slotId: slot.id, visitDate, quantity: 1 }, visitor);
     const order = createOrder({
       title: `黄鹤楼 ${product.name} x1`,
       poiId: "ticket-yellow-crane-tower-demo",
@@ -43,7 +45,7 @@ describe("repositories sandbox payment and ticket flow", () => {
       ticketName: product.name,
       slotId: slot.id,
       slotTime: slot.time,
-      visitDate: "2026-06-06",
+      visitDate,
       quantity: 1,
       amount: product.price,
       lockId: lock.id,
@@ -78,15 +80,16 @@ describe("repositories sandbox payment and ticket flow", () => {
   });
 
   it("scopes admin metrics by active ticket locks", () => {
-    const options = getTicketOptions("ticket-yellow-crane-tower-demo", "2026-06-06");
+    const visitDate = todayISO();
+    const options = getTicketOptions("ticket-yellow-crane-tower-demo", visitDate);
     const product = options.products[0]!;
     const slot = options.slots[0]!;
-    lockTickets({ productId: product.id, slotId: slot.id, visitDate: "2026-06-06", quantity: 1 }, visitor);
+    lockTickets({ productId: product.id, slotId: slot.id, visitDate, quantity: 1 }, visitor);
 
-    const metrics = getAdminMetrics({ scenic: "黄鹤楼", status: "活跃锁票", date: "2026-06-06" });
+    const metrics = getAdminMetrics({ scenic: "黄鹤楼", status: "活跃锁票", date: visitDate });
     const lockMetric = metrics.kpis.find((item) => item.label === "活跃锁票");
 
-    expect(metrics.scopeLabel).toBe("全部关键词 / 黄鹤楼 / 活跃锁票 / 2026-06-06");
+    expect(metrics.scopeLabel).toBe(`全部关键词 / 黄鹤楼 / 活跃锁票 / ${visitDate}`);
     expect(lockMetric?.value).toBe("1");
   });
 

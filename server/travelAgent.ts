@@ -18,7 +18,7 @@ export type TravelAgentDependencies = {
 const UNSUPPORTED_STABLE_POI_KEYWORD = "未接入稳定POI";
 const TICKET_INTENT_PATTERN = /预约|票|门票|核销|订单|库存|余票|演出|支付/;
 const TRAVEL_INTENT_PATTERN = /黄鹤|黄鹤楼|湖北省博物馆|省博|博物馆|江汉关|江滩|汉口江滩|动物园|武汉动物园|东湖|楚河|汉街|户部巷|景点|景区|目的地|旅游|旅行|游玩|游览|出行|行程|路线|攻略|一日游|半日游|好玩|去哪|哪里玩|必去|打卡|逛|citywalk|Citywalk|门票|预约|票|余票|库存|订单|核销|支付|少排队|老人|亲子|孩子|儿童|无障碍|美食|吃|餐厅|小吃|咖啡|茶|夜市|活动|展览|演出|自驾|开车|驾车|公交|地铁|巴士|骑行|单车|自行车|天气|交通|地图|导航/;
-const SUPPORTED_TICKET_POIS = [
+export const SUPPORTED_TICKET_POIS = [
   { id: DEFAULT_TICKET_DEMO_POI_ID, name: DEFAULT_TICKET_POI_NAME, keywords: [DEFAULT_TICKET_POI_NAME, "黄鹤"] }
 ];
 
@@ -56,6 +56,9 @@ export async function runTravelAgent(input: string, dependencies: TravelAgentDep
     tags: intent.poiKeyword ? [] : intent.tags,
     limit: 4
   });
+  // Keyword search can match companies, stationery shops etc.; a travel
+  // agent should only ever recommend tourism-relevant places.
+  poiResult.items = poiResult.items.filter(isTourismPoi);
   const reverseResult = center
     ? await dependencies.mapProvider.reverseGeocode({ lng: center.lng, lat: center.lat, cityId: DEFAULT_CITY_ID })
     : undefined;
@@ -86,8 +89,20 @@ export async function runTravelAgent(input: string, dependencies: TravelAgentDep
 
   return {
     ...deterministic,
+    text: modelText.text ?? deterministic.text,
     sourceNote: modelText.sourceNote ?? deterministic.sourceNote
   };
+}
+
+// AMap top-level type prefixes that are never tourism recommendations:
+// 06 shopping, 07 daily-life services, 12 commercial housing, 16 finance,
+// 17 companies. Curated local data (no amapType) always passes.
+const NON_TOURISM_TYPE_PREFIXES = new Set(["06", "07", "12", "16", "17"]);
+
+export function isTourismPoi(poi: { source?: { amapType?: string } }): boolean {
+  const amapType = poi.source?.amapType ?? "";
+  if (!amapType) return true;
+  return !amapType.split("|").every((code) => NON_TOURISM_TYPE_PREFIXES.has(code.slice(0, 2)));
 }
 
 function inferIntent(query: string) {
@@ -258,11 +273,27 @@ function composeAgentResponse(input: {
     cards,
     toolCalls: input.toolCalls,
     confidence: confidenceFromTools(input.toolCalls),
-    sourceNote: buildSourceNote(input.poiResult, input.routeResult, input.weatherResult, input.ticketResult)
+    sourceNote: buildSourceNote(input.poiResult, input.routeResult, input.weatherResult, input.ticketResult),
+    // Lets the map page take over this exact plan (智能导览跨页联动).
+    mapStops: input.poiResult.items.slice(0, 5).map((poi) => ({ name: poi.name, lng: poi.lng, lat: poi.lat }))
   };
 }
 
-async function tryModelCompletion(query: string, fallback: AiResponse, config?: TravelAgentDependencies["aiProvider"]) {
+// The model may rephrase tool results but must not introduce factual claims
+// the tools never made (payment success, live stock, weather). A blocked
+// reply falls back to the deterministic tool text.
+export function modelTextViolatesGuardrails(content: string, fallback: AiResponse): boolean {
+  const riskyClaims = [/真实支付/, /支付(已)?(成功|完成)/, /已出票/, /订单(已)?确认/, /实时(库存|余票)/];
+  if (riskyClaims.some((pattern) => pattern.test(content) && !pattern.test(fallback.text))) return true;
+
+  const weatherAvailable = fallback.toolCalls.some((tool) => tool.name === "天气查询" && tool.status === "success");
+  const weatherPattern = /晴朗|晴天|下雨|降雨|气温|°C|℃|多云|阴天/;
+  if (!weatherAvailable && weatherPattern.test(content) && !weatherPattern.test(fallback.text)) return true;
+
+  return false;
+}
+
+async function tryModelCompletion(query: string, fallback: AiResponse, config?: TravelAgentDependencies["aiProvider"]): Promise<{ text?: string; sourceNote?: string }> {
   const provider = config?.provider ?? process.env.AI_PROVIDER ?? "fallback";
   const baseURL = config?.baseURL ?? process.env.AI_BASE_URL;
   const apiKey = config?.apiKey ?? process.env.AI_API_KEY;
@@ -317,9 +348,21 @@ async function tryModelCompletion(query: string, fallback: AiResponse, config?: 
       body: JSON.stringify(body)
     });
     if (!response.ok) throw new Error(`AI provider HTTP ${response.status}`);
-    await response.json();
+    const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = payload.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+      return {
+        sourceNote: `${fallback.sourceNote} 服务端模型返回为空，使用 deterministic Agent fallback。`
+      };
+    }
+    if (modelTextViolatesGuardrails(content, fallback)) {
+      return {
+        sourceNote: `${fallback.sourceNote} 服务端模型：${provider}/${model} 输出未通过安全校验（疑似虚构支付/库存/天气结论），最终事实文本仍由工具结果 deterministic 生成，易变信息以官方接口为准。`
+      };
+    }
     return {
-      sourceNote: `${fallback.sourceNote} 服务端模型：${provider}/${model} 已调用；最终事实文本仍由工具结果 deterministic 生成，易变信息以官方接口为准。`
+      text: content,
+      sourceNote: `${fallback.sourceNote} 回答文案由服务端模型 ${provider}/${model} 基于工具结果生成；票务、客流与天气等易变信息以官方接口为准。`
     };
   } catch (error) {
     return {
@@ -367,7 +410,7 @@ function mapToolStatus(result: MapProviderMeta, hasData: boolean): AiToolCall["s
   return /not configured|MAP_PROVIDER=fallback/.test(reason) ? "success" : "failed";
 }
 
-function poiToCard(poi: NearbyPoi) {
+export function poiToCard(poi: NearbyPoi) {
   const meta = [
     poi.category,
     poi.rating !== undefined ? `评分 ${poi.rating}` : "评分未返回",
@@ -384,7 +427,7 @@ function poiToCard(poi: NearbyPoi) {
   };
 }
 
-function ticketCard(ticketResult: ReturnType<typeof resolveTicketCandidates>) {
+export function ticketCard(ticketResult: ReturnType<typeof resolveTicketCandidates>) {
   const product = ticketResult.products[0];
   const slot = ticketResult.slots[0];
   return {
@@ -427,7 +470,7 @@ function buildSourceNote(
   ].join("");
 }
 
-function confidenceFromTools(toolCalls: AiToolCall[]) {
+export function confidenceFromTools(toolCalls: AiToolCall[]) {
   const success = toolCalls.filter((tool) => tool.status === "success").length;
   const failed = toolCalls.filter((tool) => tool.status === "failed").length;
   const skipped = toolCalls.filter((tool) => tool.status === "skipped").length;

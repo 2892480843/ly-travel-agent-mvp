@@ -49,6 +49,7 @@ import type { MetricItem, Order } from "../types";
 import { createMerchant, decideReview, fetchAdminMetrics, fetchMerchants, fetchOrders, fetchReviews, syncMerchantInventory, verifyTicketVoucher } from "../services/apiClient";
 import { describeAdminFilterScope, filterAdminRows, filterReviewRows, nextPublishStatus, validateRequired, type AdminFilterState } from "../services/adminService";
 import { triggerOperation } from "../services/operationService";
+import { addDaysISO, monthDay, todayISO } from "../utils/demoDates";
 
 const merchantColumns = ["商户名称", "类别", "营业状态", "库存同步", "评分", "近7日订单", "审核状态", "标签"];
 const knowledgeColumns = ["问题标题", "分类", "来源", "更新时间", "状态", "命中次数"];
@@ -58,7 +59,7 @@ const defaultFilterState: AdminFilterState = {
   keyword: "",
   scenic: "全部景区",
   status: "全部状态",
-  date: "2026-06-02"
+  date: todayISO()
 };
 const dashboardFilterState: AdminFilterState = {
   keyword: "",
@@ -495,7 +496,7 @@ export function ContentPage() {
           {["商户入驻审核流程：提交 → 资料初审 → 资质审核 → 上线", "内容发布审核流程：提交 → 内容审核 → 合规审核 → 发布"].map((item) => <p key={item}>{item}</p>)}
         </Section>
         <Section title="策略配置">
-          {["推荐策略 已启用 3 个策略", "券包投放 已启用 2 个活动", "活动排期 下次发布 06-03 10:00"].map((item) => <p key={item}><StatusTag tone="green">启用中</StatusTag> {item}</p>)}
+          {["推荐策略 已启用 3 个策略", "券包投放 已启用 2 个活动", `活动排期 下次发布 ${monthDay(addDaysISO(1))} 10:00`].map((item) => <p key={item}><StatusTag tone="green">启用中</StatusTag> {item}</p>)}
         </Section>
       </div>
       <Drawer open={open} onClose={() => setOpen(false)} title="新增商户">
@@ -776,7 +777,7 @@ export function CampaignsPage() {
       <div className="grid grid-2" style={{ marginTop: 18 }}>
         <ChartCard title="活动转化趋势"><TrafficChart type="bar" /></ChartCard>
         <Section title="近期上线日程">
-          {["06-03 江滩夜游周末线 待上线", "06-05 端午民俗文化节 待上线", "06-09 亲子研学季 待上线"].map((item) => <p key={item}><CalendarDays size={16} color="var(--blue)" /> {item}</p>)}
+          {[`${monthDay(addDaysISO(1))} 江滩夜游周末线 待上线`, `${monthDay(addDaysISO(3))} 端午民俗文化节 待上线`, `${monthDay(addDaysISO(7))} 亲子研学季 待上线`].map((item) => <p key={item}><CalendarDays size={16} color="var(--blue)" /> {item}</p>)}
         </Section>
       </div>
       <Drawer open={open} onClose={() => setOpen(false)} title="新建专题">
@@ -922,9 +923,9 @@ export function ReviewPage() {
           <div className="grid grid-2">
             <Section title="审核日志">
               <ReviewTable columns={["时间", "操作人", "操作类型", "结果"]} rows={[
-                ["2026-06-02 10:12", "张景区", "通过", "通过"],
-                ["2026-06-02 09:48", "王思语", "驳回", "驳回"],
-                ["2026-06-02 09:32", "陈梦", "通过", "通过"]
+                [`${todayISO()} 10:12`, "张景区", "通过", "通过"],
+                [`${todayISO()} 09:48`, "王思语", "驳回", "驳回"],
+                [`${todayISO()} 09:32`, "陈梦", "通过", "通过"]
               ]} />
             </Section>
             <ChartCard title="审核趋势（7日）"><TrafficChart type="line" /></ChartCard>
@@ -980,9 +981,9 @@ export function WorkflowPage() {
   const [extraLogs, setExtraLogs] = useState<string[][]>([]);
   const logs = useMemo(() => [
     ...extraLogs,
-    ["2026-06-02 14:35", "张景区", "更新节点", `修改了「${activeFlow} / ${node.title}」的 SLA 配置`],
-    ["2026-06-02 11:20", "李运营", "新增节点", "在资质审核后新增实地核验节点"],
-    ["2026-06-01 18:10", "王法务", "发布流程", "发布流程版本 v1.2.0"]
+    [`${todayISO()} 14:35`, "张景区", "更新节点", `修改了「${activeFlow} / ${node.title}」的 SLA 配置`],
+    [`${todayISO()} 11:20`, "李运营", "新增节点", "在资质审核后新增实地核验节点"],
+    [`${addDaysISO(-1)} 18:10`, "王法务", "发布流程", "发布流程版本 v1.2.0"]
   ], [activeFlow, extraLogs, node.title]);
 
   const addWorkflowLog = (action: string, detail: string) => {

@@ -1,3 +1,4 @@
+import { addDaysISO, monthDay, todayISO } from "../utils/demoDates";
 import {
   Activity,
   BarChart3,
@@ -205,8 +206,8 @@ export const channelData = [
 ];
 
 export const orders = [
-  { id: "T20260602001", title: "黄鹤楼 sandbox 成人票 x2", status: "待出行", amount: 110, date: "2026-06-06 08:00-10:00", image: spotImages.yellowCraneTower },
-  { id: "P20260602018", title: "武汉文化深度游三日行程", status: "已确认", amount: 2680, date: "2026-06-06 至 06-08", image: spotImages.hubeiMuseum },
+  { id: "T20260602001", title: "黄鹤楼 sandbox 成人票 x2", status: "待出行", amount: 110, date: `${todayISO()} 08:00-10:00`, image: spotImages.yellowCraneTower },
+  { id: "P20260602018", title: "武汉文化深度游三日行程", status: "已确认", amount: 2680, date: `${todayISO()} 至 ${monthDay(addDaysISO(2))}`, image: spotImages.hubeiMuseum },
   { id: "M20260602033", title: "江汉关夜游套餐", status: "待支付", amount: 398, date: "支付剩余 14:56", image: spotImages.jianghanGuan }
 ];
 

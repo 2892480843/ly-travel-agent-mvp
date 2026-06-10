@@ -1,4 +1,5 @@
 import type { City, MapPoint, Poi, PoiCategory, RouteMode, RouteResult } from "../src/types";
+import { orderOpenTour } from "../src/utils/tour";
 import { DEFAULT_CITY_ADCODE, DEFAULT_CITY_ID, DEFAULT_CITY_NAME, DEFAULT_CITY_OFFICIAL_NAME } from "./config/city";
 
 export type MapProviderMeta = {
@@ -147,8 +148,29 @@ type AmapRoutePath = {
   }>;
 };
 
+type RouteLeg = {
+  points: MapPoint[];
+  distanceMeters: number;
+  durationSeconds: number;
+};
+
 const AMAP_BASE_URL = "https://restapi.amap.com";
-const DEFAULT_TIMEOUT_MS = 3500;
+// Category-wide place searches and per-leg routing can take noticeably
+// longer than point lookups; 3.5s aborted real responses in practice.
+const DEFAULT_TIMEOUT_MS = 8000;
+// One shared key quota (~3 QPS for personal keys) across ALL endpoints.
+const AMAP_REQUEST_INTERVAL_MS = 400;
+const AMAP_QPS_RETRY_LIMIT = 2;
+const AMAP_QPS_BACKOFF_MS = 900;
+const POI_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isQpsError(error: unknown): boolean {
+  return error instanceof Error && /CUQPS|QPS_HAS_EXCEEDED|1002[01]|10019/.test(error.message);
+}
 
 export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config: MapProviderConfig = {}): MapProvider {
   const provider = normalizeProvider(config.provider ?? process.env.MAP_PROVIDER ?? "fallback");
@@ -162,38 +184,68 @@ export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config:
       return localPoiSearch(normalized, fallbackReason(provider, apiKey));
     }
 
+    // Identical searches within the TTL (page reloads, StrictMode double
+    // effects) are served from cache instead of burning QPS quota.
+    const cacheKey = JSON.stringify([normalized.keyword, normalized.cityId, normalized.category, normalized.limit, normalized.lng, normalized.lat, normalized.radius, normalized.tags]);
+    const cached = poiSearchCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) return cached.result;
+
     try {
       const city = resolveCity(data.cities, normalized.cityId);
       const params: Record<string, string | number | undefined> = {
-        keywords: normalized.keyword,
         city: city.adcode,
         citylimit: "true",
-        offset: normalized.limit,
+        // AMap caps page size at 25.
+        offset: Math.min(normalized.limit, 25),
         page: 1,
         extensions: "base"
       };
+      if (normalized.keyword) params.keywords = normalized.keyword;
+      const typeCode = normalized.category && normalized.category !== "全部"
+        ? AMAP_CATEGORY_TYPE_CODES[normalized.category]
+        : undefined;
+      if (typeCode) params.types = typeCode;
+      if (!params.keywords && !typeCode && normalized.category && normalized.category !== "全部") {
+        params.keywords = normalized.category;
+      }
 
-      const response = Number.isFinite(normalized.lng) && Number.isFinite(normalized.lat)
+      const hasLocation = Number.isFinite(normalized.lng) && Number.isFinite(normalized.lat);
+      if (!hasLocation && !params.keywords && !params.types) {
+        // The text endpoint requires keywords or types; serve "everything"
+        // requests from the curated local dataset instead.
+        throw new Error("AMap place text search requires keywords or types.");
+      }
+      const response = hasLocation
         ? await amapGet("/v3/place/around", {
           ...params,
           location: `${normalized.lng},${normalized.lat}`,
-          radius: normalized.radius ?? 3000
+          radius: normalized.radius ?? 3000,
+          // Rank by popularity weight, not raw distance, so city-center
+          // searches surface landmarks rather than the nearest small POI.
+          sortrule: "weight"
         })
         : await amapGet("/v3/place/text", params);
       const items = (response.pois ?? [])
         .map((poi) => mapAmapPoi(poi, normalized.cityId ?? city.id))
         .filter((poi): poi is NearbyPoi => Boolean(poi))
         .slice(0, normalized.limit);
-      return {
+      const result: PoiSearchResult = {
         provider,
         coordinateSystem: "GCJ-02",
         fallback: false,
         items
       };
+      poiSearchCache.set(cacheKey, { expires: Date.now() + POI_CACHE_TTL_MS, result });
+      return result;
     } catch (error) {
       return localPoiSearch(normalized, parseFailureReason(error));
     }
   }
+
+  const routeLegCache = new Map<string, RouteLeg>();
+  const poiSearchCache = new Map<string, { expires: number; result: PoiSearchResult }>();
+  let amapQueueTail: Promise<void> = Promise.resolve();
+  let lastAmapRequestAt = 0;
 
   async function route(input: RouteRequest): Promise<RouteResult> {
     const normalized = normalizeRouteInput(input, data.pois);
@@ -203,30 +255,32 @@ export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config:
 
     try {
       const mode = normalized.mode ?? "walking";
-      const endpoint = routeEndpoint(mode);
       const city = resolveCity(data.cities, normalized.cityId);
-      const params: Record<string, string | number | undefined> = {
-        origin: pointToAmap(normalized.origin),
-        destination: pointToAmap(normalized.destination),
-        show_fields: "cost,polyline",
-        strategy: mode === "driving" ? 32 : undefined
-      };
-      if (normalized.waypoints?.length && mode === "driving") {
-        params.waypoints = normalized.waypoints.map(pointToAmap).join(";");
+      const stops = resolveRouteStops(normalized);
+      // The AMap driving API accepts native waypoints in one call; walking /
+      // transit / bicycling do not, so those are routed leg by leg and the
+      // legs stitched together — otherwise intermediate stops silently drop
+      // off the route.
+      const legs: RouteLeg[] = [];
+      if (mode === "driving") {
+        legs.push(await requestRouteLeg(stops[0], stops[stops.length - 1], mode, city, stops.slice(1, -1)));
+      } else {
+        for (let index = 1; index < stops.length; index += 1) {
+          legs.push(await requestRouteLeg(stops[index - 1], stops[index], mode, city));
+        }
       }
-      if (mode === "transit") {
-        params.city1 = city.adcode;
-        params.city2 = city.adcode;
-      }
-      const response = await amapGet(endpoint, params);
-      const path = firstRoutePath(response);
-      if (!path) throw new Error("AMap route response has no path.");
-      const distanceMeters = toNumber(path.distance) ?? 0;
-      const durationSeconds = toNumber(path.duration) ?? toNumber(path.cost?.duration) ?? 0;
-      const parsedPoints = parseRoutePoints(path);
-      const points = parsedPoints.length > 0
-        ? parsedPoints
-        : [normalized.origin, ...(normalized.waypoints ?? []), normalized.destination];
+      const points: MapPoint[] = [];
+      let distanceMeters = 0;
+      let durationSeconds = 0;
+      legs.forEach((leg) => {
+        distanceMeters += leg.distanceMeters;
+        durationSeconds += leg.durationSeconds;
+        leg.points.forEach((point) => {
+          const last = points[points.length - 1];
+          if (!last || last.lng !== point.lng || last.lat !== point.lat) points.push(point);
+        });
+      });
+      if (points.length < 2) throw new Error("AMap route produced no usable path.");
       return {
         provider,
         coordinateSystem: "GCJ-02",
@@ -234,14 +288,44 @@ export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config:
         distanceMeters: Math.round(distanceMeters),
         durationMinutes: Math.max(1, Math.round(durationSeconds / 60)),
         points,
-        waypointNames: [normalized.origin, ...(normalized.waypoints ?? []), normalized.destination]
-          .map((point, index) => point.name ?? `途经点 ${index + 1}`),
+        waypointNames: stops.map((point, index) => point.name ?? `途经点 ${index + 1}`),
         preferences: normalized.preferences ?? ["少排队"],
         fallback: false
       };
     } catch (error) {
       return localRoute(normalized, parseFailureReason(error));
     }
+  }
+
+  async function requestRouteLeg(from: MapPoint, to: MapPoint, mode: RouteMode, city: City, waypoints?: MapPoint[]): Promise<RouteLeg> {
+    const cacheKey = [mode, pointToAmap(from), pointToAmap(to), (waypoints ?? []).map(pointToAmap).join(";")].join("|");
+    const cached = routeLegCache.get(cacheKey);
+    if (cached) return cached;
+
+    const params: Record<string, string | number | undefined> = {
+      origin: pointToAmap(from),
+      destination: pointToAmap(to),
+      show_fields: "cost,polyline",
+      strategy: mode === "driving" ? 32 : undefined
+    };
+    if (waypoints?.length && mode === "driving") {
+      params.waypoints = waypoints.map(pointToAmap).join(";");
+    }
+    if (mode === "transit") {
+      params.city1 = city.adcode;
+      params.city2 = city.adcode;
+    }
+    const response = await amapGet(routeEndpoint(mode), params);
+    const path = firstRoutePath(response);
+    if (!path) throw new Error("AMap route response has no path.");
+    const parsedPoints = parseRoutePoints(path);
+    const leg: RouteLeg = {
+      points: parsedPoints.length > 0 ? parsedPoints : [from, to],
+      distanceMeters: toNumber(path.distance) ?? 0,
+      durationSeconds: toNumber(path.duration) ?? toNumber(path.cost?.duration) ?? 0
+    };
+    routeLegCache.set(cacheKey, leg);
+    return leg;
   }
 
   async function geocode(input: { keyword: string; cityId?: string }): Promise<GeocodeResult> {
@@ -350,7 +434,31 @@ export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config:
     }
   }
 
-  async function amapGet(path: string, params: Record<string, string | number | undefined>): Promise<AmapResponse> {
+  // All AMap endpoints share one key and therefore one QPS quota, so every
+  // request — POI search, routing, geocoding — goes through a single
+  // serialized queue with spacing, and quota errors retry with backoff.
+  function amapGet(path: string, params: Record<string, string | number | undefined>): Promise<AmapResponse> {
+    const run = amapQueueTail.then(async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        const wait = lastAmapRequestAt + AMAP_REQUEST_INTERVAL_MS - Date.now();
+        if (wait > 0) await sleep(wait);
+        lastAmapRequestAt = Date.now();
+        try {
+          return await rawAmapGet(path, params);
+        } catch (error) {
+          if (attempt < AMAP_QPS_RETRY_LIMIT && isQpsError(error)) {
+            await sleep(AMAP_QPS_BACKOFF_MS * (attempt + 1));
+            continue;
+          }
+          throw error;
+        }
+      }
+    });
+    amapQueueTail = run.then(() => undefined, () => undefined);
+    return run;
+  }
+
+  async function rawAmapGet(path: string, params: Record<string, string | number | undefined>): Promise<AmapResponse> {
     const url = new URL(path, AMAP_BASE_URL);
     url.searchParams.set("key", apiKey);
     url.searchParams.set("output", "JSON");
@@ -399,8 +507,8 @@ export function createMapProvider(data: { pois: Poi[]; cities: City[] }, config:
     };
   }
 
-  function localRoute(input: Required<Pick<RouteRequest, "origin" | "destination" | "mode">> & RouteRequest, failureReason: string): RouteResult {
-    const points = [input.origin, ...(input.waypoints ?? []), input.destination];
+  function localRoute(input: NormalizedRouteInput, failureReason: string): RouteResult {
+    const points = resolveRouteStops(input);
     const distance = points.slice(1).reduce((total, point, index) => total + distanceMeters(points[index], point), 0);
     const speedMetersPerMinute = input.mode === "driving" ? 420 : input.mode === "transit" ? 320 : input.mode === "bicycling" ? 180 : 75;
     return {
@@ -484,20 +592,59 @@ function normalizeSearchInput(input: PoiSearchInput): Required<Pick<PoiSearchInp
   return {
     ...input,
     keyword: input.keyword?.trim(),
-    limit: Math.min(Math.max(input.limit ?? 10, 1), 30)
+    limit: Math.min(Math.max(input.limit ?? 10, 1), 100)
   };
 }
 
-function normalizeRouteInput(input: RouteRequest, pois: Poi[]): Required<Pick<RouteRequest, "origin" | "destination" | "mode">> & RouteRequest {
+/** AMap place-search category codes (v3 `types` param). */
+const AMAP_CATEGORY_TYPE_CODES: Partial<Record<PoiCategory, string>> = {
+  // World heritage / national / provincial scenic spots — keeps the demo
+  // surfacing landmarks (黄鹤楼, 东湖) instead of obscure memorial halls.
+  "景点": "110201|110202|110203",
+  // Parks and botanical gardens — the whole 110100 class is dominated by
+  // riverside city squares which all look alike.
+  "公园自然": "110101|110103",
+  "历史遗迹": "110200",
+  "美食": "050000",
+  "购物": "060000",
+  // Museums / art galleries / heritage sites only — the whole 140000 class
+  // also matches schools and training agencies.
+  "文化艺术": "140100|140200|110200",
+  // Amusement parks, zoo, botanical garden, aquarium, science museum
+  // (140600; 140500 is libraries).
+  "亲子游": "080501|110102|110103|110104|140600"
+};
+
+type NormalizedRouteInput = Required<Pick<RouteRequest, "origin" | "destination" | "mode">> & RouteRequest & {
+  /** True when the caller named no stops, so start/end are free to reorder. */
+  autoTour: boolean;
+};
+
+function normalizeRouteInput(input: RouteRequest, pois: Poi[]): NormalizedRouteInput {
+  const autoTour = !input.origin && !input.destination && !input.waypoints;
   const basePois = pois.filter((poi) => poi.cityId === (input.cityId ?? DEFAULT_CITY_ID) && poi.category === "景点").slice(0, 5);
   const origin = input.origin ?? pointFromPoi(basePois[0]);
-  const destination = input.destination ?? pointFromPoi(basePois[3] ?? basePois[0]);
+  const destination = input.destination ?? pointFromPoi(basePois[basePois.length - 1] ?? basePois[0]);
+  // Demo requests without explicit stops route through EVERY featured POI so
+  // the drawn tour connects all markers shown on the map.
+  const waypoints = input.waypoints
+    ?? (autoTour ? basePois.slice(1, -1).map(pointFromPoi) : undefined);
   return {
     ...input,
     origin,
     destination,
-    mode: input.mode ?? "walking"
+    waypoints,
+    mode: input.mode ?? "walking",
+    autoTour
   };
+}
+
+function resolveRouteStops(input: NormalizedRouteInput): MapPoint[] {
+  const allStops = [input.origin, ...(input.waypoints ?? []), input.destination];
+  // Auto-generated tours have no user-pinned stops, so optimize the full
+  // open path; explicit requests are routed EXACTLY in the order given —
+  // the caller owns the visiting order.
+  return input.autoTour ? orderOpenTour(allStops) : allStops;
 }
 
 function routeEndpoint(mode: RouteMode) {
@@ -580,8 +727,12 @@ function parseRoutePoints(path: AmapRoutePath): MapPoint[] {
   return polylines.flatMap(parsePolyline);
 }
 
-function parsePolyline(polyline: string): MapPoint[] {
-  return polyline.split(";")
+function parsePolyline(polyline: unknown): MapPoint[] {
+  // AMap occasionally returns polyline as an array of "lng,lat" segments
+  // instead of a single ";"-joined string; normalize before splitting.
+  const text = Array.isArray(polyline) ? polyline.join(";") : polyline;
+  if (typeof text !== "string" || !text) return [];
+  return text.split(";")
     .map(parseLocation)
     .filter((point): point is MapPoint => Boolean(point));
 }

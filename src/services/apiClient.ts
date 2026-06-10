@@ -5,6 +5,8 @@ import { getCities, getFeaturedPois, getPoiById, searchPois } from "./poiService
 import { getDemoTicketOptions, getDemoTicketSlots } from "./ticketService";
 import { getCurrentUser, loginAsRole } from "./authService";
 import { readOrders } from "./orderService";
+import { orderOpenTour, pathMeters } from "../utils/tour";
+import { reportLocalFallback } from "./serviceHealthService";
 
 const API_BASE = normalizeLocalApiBase(import.meta.env.VITE_API_BASE_URL ?? "");
 const PAYMENT_PROVIDER = import.meta.env.VITE_PAYMENT_PROVIDER?.trim() || "sandbox";
@@ -27,9 +29,14 @@ function normalizeLocalApiBase(base: string) {
   return base;
 }
 
-async function request<T>(path: string, options?: RequestInit, retryAuth = true): Promise<T> {
+const DEFAULT_TIMEOUT_MS = 10000;
+// AI/Agent requests can legitimately take longer than regular CRUD calls
+// (server-side AI_TIMEOUT_MS defaults to 20s), so keep this above that.
+const AI_REQUEST_TIMEOUT_MS = 30000;
+
+async function request<T>(path: string, options?: RequestInit, retryAuth = true, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 5000);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(apiUrl(path), {
       ...options,
@@ -42,7 +49,7 @@ async function request<T>(path: string, options?: RequestInit, retryAuth = true)
     });
     if (response.status === 401 && retryAuth) {
       await loginAsRole(getCurrentUser().role);
-      return await request<T>(path, options, false);
+      return await request<T>(path, options, false, timeoutMs);
     }
     if (!response.ok) {
       const detail = await response.text();
@@ -60,9 +67,15 @@ export async function fetchPois(params: PoiSearchParams = {}): Promise<Poi[]> {
   if (params.cityId) query.set("cityId", params.cityId);
   if (params.category && params.category !== "全部") query.set("category", params.category);
   if (params.limit) query.set("limit", String(params.limit));
+  if (Number.isFinite(params.lng) && Number.isFinite(params.lat)) {
+    query.set("lng", String(params.lng));
+    query.set("lat", String(params.lat));
+    if (params.radius) query.set("radius", String(params.radius));
+  }
   try {
     return await request<Poi[]>(`/api/pois?${query.toString()}`);
   } catch {
+    reportLocalFallback("pois");
     return searchPois(params);
   }
 }
@@ -89,6 +102,7 @@ export async function fetchTicketOptions(poiId = DEFAULT_TICKET_DEMO_POI_ID, vis
     if (visitDate) query.set("visitDate", visitDate);
     return await request<{ products: TicketProduct[]; slots: TicketSlot[] }>(`/api/tickets/options?${query.toString()}`);
   } catch {
+    reportLocalFallback("tickets");
     return { products: getDemoTicketOptions(poiId), slots: getDemoTicketSlots() };
   }
 }
@@ -169,6 +183,7 @@ export async function fetchOrders(): Promise<Order[]> {
   try {
     return await request<Order[]>("/api/orders");
   } catch {
+    reportLocalFallback("orders");
     return readOrders();
   }
 }
@@ -192,24 +207,85 @@ export async function simulateSandboxPayment(paymentId: string, status: "paid" |
 }
 
 export async function fetchRoute(payload: { origin?: MapPoint; destination?: MapPoint; waypoints?: MapPoint[]; mode?: RouteMode; preferences?: string[]; cityId?: string }): Promise<RouteResult> {
-  return await request<RouteResult>("/api/maps/route", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  try {
+    // Multi-leg routing is sequential on the server (QPS throttled), so it
+    // legitimately needs more headroom than regular CRUD calls.
+    return await request<RouteResult>("/api/maps/route", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }, true, AI_REQUEST_TIMEOUT_MS);
+  } catch {
+    reportLocalFallback("route");
+    return buildLocalRoute(payload);
+  }
+}
+
+// Mirrors the server-side localRoute estimate so the map page still shows a
+// usable demo route (and the MapPanel can road-snap it) when the API is down.
+function buildLocalRoute(payload: { origin?: MapPoint; destination?: MapPoint; waypoints?: MapPoint[]; mode?: RouteMode; preferences?: string[]; cityId?: string }): RouteResult {
+  const mode = payload.mode ?? "walking";
+  let stops: MapPoint[];
+  if (payload.origin && payload.destination) {
+    stops = [payload.origin, ...(payload.waypoints ?? []), payload.destination];
+  } else {
+    // Same source/filters as the map page's POI fallback so the route line
+    // and the rendered markers stay in sync.
+    stops = searchPois({ cityId: payload.cityId ?? DEFAULT_CITY_ID, category: "景点", limit: 5 })
+      .map((poi) => ({ name: poi.name, lng: poi.lng, lat: poi.lat }));
+  }
+  stops = orderOpenTour(stops);
+  const distanceMeters = Math.round(pathMeters(stops) * 1.18);
+  const speedMetersPerMinute = mode === "driving" ? 420 : mode === "transit" ? 320 : mode === "bicycling" ? 180 : 75;
+  return {
+    provider: "local",
+    coordinateSystem: "GCJ-02",
+    mode,
+    distanceMeters,
+    durationMinutes: Math.max(1, Math.round(distanceMeters / speedMetersPerMinute)),
+    points: stops,
+    waypointNames: stops.map((stop, index) => stop.name ?? `途经点 ${index + 1}`),
+    preferences: payload.preferences ?? ["少排队"],
+    fallback: true,
+    failureReason: "后端路线服务不可用，距离与时长为本地演示估算。"
+  };
+}
+
+
+export type StoredConversationMessage = {
+  id: string;
+  role: "user" | "assistant";
+  parts: Array<Record<string, unknown>>;
+  metadata?: Record<string, unknown>;
+};
+
+export async function fetchLatestConversation(): Promise<{ conversationId?: string; messages: StoredConversationMessage[] }> {
+  try {
+    return await request<{ conversationId: string; messages: StoredConversationMessage[] }>("/api/agent/conversations/latest");
+  } catch {
+    return { messages: [] };
+  }
+}
+
+export async function createConversation(): Promise<{ conversationId?: string }> {
+  try {
+    return await request<{ conversationId: string }>("/api/agent/conversations", { method: "POST", body: "{}" });
+  } catch {
+    return {};
+  }
 }
 
 export async function chatWithAgent(input: string): Promise<AiResponse> {
   return await request<AiResponse>("/api/agent/chat", {
     method: "POST",
     body: JSON.stringify({ input })
-  });
+  }, true, AI_REQUEST_TIMEOUT_MS);
 }
 
-export async function generateItinerary(payload: { days?: number; preferences?: string[]; cityId?: string }): Promise<GeneratedItineraryResponse> {
+export async function generateItinerary(payload: { days?: number; preferences?: string[]; cityId?: string; stops?: MapPoint[] }): Promise<GeneratedItineraryResponse> {
   return await request<GeneratedItineraryResponse>("/api/itineraries/generate", {
     method: "POST",
     body: JSON.stringify(payload)
-  });
+  }, true, AI_REQUEST_TIMEOUT_MS);
 }
 
 export async function fetchAdminMetrics(filters: AdminMetricsFilter = {}): Promise<AdminMetrics> {
@@ -222,6 +298,7 @@ export async function fetchAdminMetrics(filters: AdminMetricsFilter = {}): Promi
   try {
     return await request<AdminMetrics>(path);
   } catch {
+    reportLocalFallback("metrics");
     return {
       kpis,
       alerts: [
@@ -334,7 +411,9 @@ function fallbackOperationMessage(label: string, type: string) {
   const labelMessage = fallbackOperationMessageForLabel(label);
   if (labelMessage) return labelMessage;
 
-  return `${label}已处理完成。`;
+  // Avoid claiming completion for unknown actions; the UI may only have
+  // opened an entry point (e.g. a form drawer) rather than finished anything.
+  return `已收到「${label}」操作（演示模式，未发生真实业务变更）。`;
 }
 
 function fallbackOperationMessageForLabel(label: string) {

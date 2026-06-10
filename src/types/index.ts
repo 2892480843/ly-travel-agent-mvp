@@ -58,6 +58,8 @@ export type GeneratedItineraryResponse = {
   items: GeneratedItineraryItem[];
   sourceNote: string;
   toolCalls: AiToolCall[];
+  /** Stops of the generated plan, consumable by the map page (智能导览). */
+  mapStops?: MapPoint[];
 };
 
 export type MetricItem = {
@@ -125,6 +127,10 @@ export type PoiSearchParams = {
   category?: PoiCategory | "全部";
   tags?: string[];
   limit?: number;
+  /** Center-point search (e.g. city center) instead of a city-wide query. */
+  lng?: number;
+  lat?: number;
+  radius?: number;
 };
 
 export type TicketStockStatus = "available" | "low" | "soldOut" | "verify";
@@ -283,6 +289,16 @@ export type AiResponse = {
   toolCalls: AiToolCall[];
   confidence: number;
   sourceNote: string;
+  /** Tour-able stops resolved by the agent, consumable by the map page. */
+  mapStops?: MapPoint[];
+};
+
+/** Metadata attached to streamed assistant messages (Agent v2). */
+export type AgentMessageMetadata = {
+  conversationId?: string;
+  aiResponse?: AiResponse;
+  /** Set when guardrails rejected the streamed text; UI must display this instead. */
+  sanitizedText?: string;
 };
 
 export type AdminMetrics = {

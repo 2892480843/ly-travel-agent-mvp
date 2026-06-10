@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, type UIMessage } from "ai";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Bot,
   Camera,
@@ -11,6 +15,7 @@ import {
   MapPin,
   Mic,
   Navigation,
+  Plus,
   QrCode,
   Send,
   ShieldCheck,
@@ -35,11 +40,16 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import type { AiResponse, MapPoint, MetricItem, Poi, RouteResult, ScenicSpot, StatusTone, TimelineItem, WorkflowNode } from "../types";
+import type { AgentMessageMetadata, AiResponse, MapPoint, MetricItem, Poi, RouteResult, ScenicSpot, StatusTone, TimelineItem, WorkflowNode } from "../types";
 import { channelData, spotImages, trafficData, workflowNodes } from "../data/mockData";
 import { DEFAULT_CITY_CENTER, DEFAULT_CITY_NAME, DEFAULT_TICKET_POI_NAME, DEFAULT_TICKET_ROUTE } from "../config/city";
 import { askTravelAssistant } from "../services/aiService";
+import { apiUrl, createConversation, fetchLatestConversation } from "../services/apiClient";
+import { saveTourIntent } from "../services/tourIntentService";
 import { triggerOperation } from "../services/operationService";
+import { todayISO } from "../utils/demoDates";
+import { flatMeters, orderOpenTour } from "../utils/tour";
+import { IS_LIVE } from "../config/appEnv";
 
 export function StatusTag({ children, tone = "blue" }: { children: ReactNode; tone?: StatusTone }) {
   return <span className={`tag ${tone}`}>{children}</span>;
@@ -62,6 +72,15 @@ export function PageLoader({ label = "正在加载智慧文旅服务" }: { label
       </div>
     </div>
   );
+}
+
+/**
+ * Marks hardcoded showcase content. Renders nothing in demo mode; in live
+ * deployments it labels the content so it cannot pass as production data.
+ */
+export function DemoDataBadge({ label = "演示数据" }: { label?: string }) {
+  if (!IS_LIVE) return null;
+  return <span className="demo-data-badge">{label}</span>;
 }
 
 export function PageHeader({
@@ -216,17 +235,90 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
   );
 }
 
-type ChatMessage = {
-  role: "user" | "ai";
-  text: string;
-  result?: AiResponse;
-};
-
 export type AIChatPromptRequest = {
   id: number;
   text: string;
   autoSubmit?: boolean;
 };
+
+type AgentUIMessage = UIMessage<AgentMessageMetadata>;
+
+const TOOL_PART_LABELS: Record<string, string> = {
+  search_pois: "POI 搜索",
+  plan_route: "路线规划",
+  get_weather: "天气查询",
+  get_ticket_options: "票务候选",
+  generate_itinerary: "行程编排",
+  show_on_map: "同步到导览地图"
+};
+
+const SEED_MESSAGES: AgentUIMessage[] = [
+  { id: "seed-u1", role: "user", parts: [{ type: "text", text: "武汉一日游，有哪些必去景点和美食推荐？" }] },
+  {
+    id: "seed-a1",
+    role: "assistant",
+    parts: [{ type: "text", text: "为你生成经典轻松路线：黄鹤楼 → 黄鹤楼公园 → 江汉关博物馆 → 汉口江滩。当前客流为演示估算，建议上午登楼、下午江滩慢游。" }],
+    metadata: {
+      aiResponse: {
+        text: "为你生成经典轻松路线：黄鹤楼 → 黄鹤楼公园 → 江汉关博物馆 → 汉口江滩。当前客流为演示估算，建议上午登楼、下午江滩慢游。",
+        cards: [],
+        toolCalls: [
+          { name: "POI 搜索", status: "success", summary: "命中武汉真实 POI 候选" },
+          { name: "路线提示", status: "success", summary: "已按轻松游约束生成" }
+        ],
+        confidence: 0.78,
+        sourceNote: "演示初始消息；票务、价格、开放时间以官方接口为准。"
+      }
+    }
+  },
+  { id: "seed-u2", role: "user", parts: [{ type: "text", text: "帮我把黄鹤楼加入预约，并避开排队高峰。" }] },
+  {
+    id: "seed-a2",
+    role: "assistant",
+    parts: [{ type: "text", text: "已为你选择 08:00-10:00 sandbox 候选时段，成人票 2 张。请进入订单确认页核对游客信息；本系统当前只做演示支付。" }],
+    metadata: {
+      aiResponse: {
+        text: "已为你选择 08:00-10:00 sandbox 候选时段，成人票 2 张。请进入订单确认页核对游客信息；本系统当前只做演示支付。",
+        cards: [{ id: "ticket-yellow-crane-tower", title: "黄鹤楼上午票", subtitle: "08:00-10:00 · sandbox 演示库存", href: DEFAULT_TICKET_ROUTE, actionLabel: "去确认" }],
+        toolCalls: [{ name: "票务库存查询", status: "success", summary: "返回演示库存，真实库存以官方接口为准" }],
+        confidence: 0.81,
+        sourceNote: "当前为演示票务候选，不代表真实锁票。"
+      }
+    }
+  }
+];
+
+function messageText(message: AgentUIMessage): string {
+  const streamed = message.parts
+    .filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof (part as { text?: unknown }).text === "string")
+    .map((part) => part.text)
+    .join("");
+  return message.metadata?.sanitizedText ?? (streamed || message.metadata?.aiResponse?.text || "");
+}
+
+/** Assistant bubbles render model markdown (GFM tables/lists/bold) instead of raw text. */
+function MarkdownText({ text, streaming }: { text: string; streaming?: boolean }) {
+  return (
+    <div className={`chat-markdown ${streaming ? "is-streaming" : ""}`}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
+function toolPartsOf(message: AgentUIMessage) {
+  return message.parts
+    .filter((part) => typeof part.type === "string" && part.type.startsWith("tool-"))
+    .map((part) => {
+      const toolPart = part as { type: string; toolCallId: string; state: string; errorText?: string };
+      const toolName = toolPart.type.replace(/^tool-/, "");
+      return {
+        key: toolPart.toolCallId,
+        label: TOOL_PART_LABELS[toolName] ?? toolName,
+        state: toolPart.state,
+        errorText: toolPart.errorText
+      };
+    });
+}
 
 export function AIChat({
   onResult,
@@ -240,177 +332,239 @@ export function AIChat({
   const shouldReduceMotion = useReducedMotion();
   const chatRef = useRef<HTMLDivElement | null>(null);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "user", text: "武汉一日游，有哪些必去景点和美食推荐？" },
-    {
-      role: "ai",
-      text: "为你生成经典轻松路线：黄鹤楼 → 黄鹤楼公园 → 江汉关博物馆 → 汉口江滩。当前客流为演示估算，建议上午登楼、下午江滩慢游。",
-      result: {
-        text: "为你生成经典轻松路线：黄鹤楼 → 黄鹤楼公园 → 江汉关博物馆 → 汉口江滩。当前客流为演示估算，建议上午登楼、下午江滩慢游。",
-        cards: [],
-        toolCalls: [
-          { name: "POI 搜索", status: "success", summary: "命中武汉真实 POI 候选" },
-          { name: "路线提示", status: "success", summary: "已按轻松游约束生成" }
-        ],
-        confidence: 0.78,
-        sourceNote: "演示初始消息；票务、价格、开放时间以官方接口为准。"
+  const conversationIdRef = useRef<string | undefined>(undefined);
+  const lastPromptRef = useRef("");
+  const [historyReady, setHistoryReady] = useState(false);
+
+  const transport = useMemo(() => new DefaultChatTransport<AgentUIMessage>({
+    api: apiUrl("/api/agent/chat/stream"),
+    credentials: "include",
+    prepareSendMessagesRequest: ({ messages: outgoing }) => {
+      const lastUser = [...outgoing].reverse().find((message) => message.role === "user");
+      const text = lastUser ? messageText(lastUser as AgentUIMessage) : "";
+      return { body: { input: text, conversationId: conversationIdRef.current } };
+    }
+  }), []);
+
+  const { messages, setMessages, sendMessage, status } = useChat<AgentUIMessage>({
+    transport,
+    messages: SEED_MESSAGES,
+    onData: (dataPart) => {
+      if (dataPart.type === "data-meta") {
+        const meta = dataPart.data as { conversationId?: string };
+        if (meta?.conversationId) conversationIdRef.current = meta.conversationId;
+      }
+      if (dataPart.type === "data-action") {
+        const action = dataPart.data as { type?: string; label?: string; stops?: MapPoint[] };
+        if (action?.type === "tour-intent" && action.stops && action.stops.length >= 2) {
+          saveTourIntent({ source: "assistant", label: action.label ?? lastPromptRef.current, stops: action.stops });
+          window.dispatchEvent(new CustomEvent("ly:operation-result", {
+            detail: { status: "completed", message: `已将 ${action.stops.length} 个地点同步到智能导览页` }
+          }));
+        }
       }
     },
-    { role: "user", text: "帮我把黄鹤楼加入预约，并避开排队高峰。" },
-    {
-      role: "ai",
-      text: "已为你选择 08:00-10:00 sandbox 候选时段，成人票 2 张。请进入订单确认页核对游客信息；本系统当前只做演示支付。",
-      result: {
-        text: "已为你选择 08:00-10:00 sandbox 候选时段，成人票 2 张。请进入订单确认页核对游客信息；本系统当前只做演示支付。",
-        cards: [{ id: "ticket-yellow-crane-tower", title: "黄鹤楼上午票", subtitle: "08:00-10:00 · sandbox 演示库存", href: DEFAULT_TICKET_ROUTE, actionLabel: "去确认" }],
-        toolCalls: [
-          { name: "票务库存查询", status: "success", summary: "返回演示库存，真实库存以官方接口为准" }
-        ],
-        confidence: 0.81,
-        sourceNote: "当前为演示票务候选，不代表真实锁票。"
-      }
+    onFinish: ({ message }) => {
+      const aiResponse = message.metadata?.aiResponse;
+      if (aiResponse) onResult?.(aiResponse, lastPromptRef.current || "对话");
+    },
+    onError: () => {
+      // Degrade: legacy JSON route → local deterministic fallback (handled inside askTravelAssistant).
+      const prompt = lastPromptRef.current;
+      if (!prompt) return;
+      void askTravelAssistant(prompt).then((result) => {
+        setMessages((current) => [...current, {
+          id: `fallback-${Date.now()}`,
+          role: "assistant",
+          parts: [{ type: "text", text: result.text }],
+          metadata: { aiResponse: result }
+        } as AgentUIMessage]);
+        onResult?.(result, prompt);
+      });
     }
-  ]);
+  });
 
-  const submit = async (value = input) => {
+  const busy = status === "submitted" || status === "streaming";
+
+  // Restore the latest persisted conversation; keep demo seeds when empty.
+  useEffect(() => {
+    let alive = true;
+    fetchLatestConversation().then(({ conversationId, messages: stored }) => {
+      if (!alive) return;
+      if (conversationId) conversationIdRef.current = conversationId;
+      if (stored.length) {
+        setMessages(stored as unknown as AgentUIMessage[]);
+      }
+      setHistoryReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Publish the latest assistant state once for the surrounding page chrome.
+  useEffect(() => {
+    if (!historyReady) return;
+    const latest = [...messages].reverse().find((message) => message.role === "assistant" && message.metadata?.aiResponse);
+    if (latest?.metadata?.aiResponse) onResult?.(latest.metadata.aiResponse, "initial-demo");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyReady]);
+
+  const submit = (value = input) => {
     const clean = value.trim();
-    if (!clean || loading) return;
-    setMessages((prev) => [...prev, { role: "user", text: clean }]);
+    if (!clean || busy) return;
+    lastPromptRef.current = clean;
     setInput("");
-    setLoading(true);
-    try {
-      const result = await askTravelAssistant(clean);
-      onResult?.(result, clean);
-      setMessages((prev) => [...prev, { role: "ai", text: result.text, result }]);
-    } catch {
-      const fallback = "服务暂时不可用，已保留你的问题。建议先查看推荐页或票务页继续演示。";
-      setMessages((prev) => [...prev, { role: "ai", text: fallback }]);
-    } finally {
-      setLoading(false);
-    }
+    void sendMessage({ text: clean });
   };
 
-  const activateDemoTool = (label: "语音输入" | "拍照识别") => {
-    if (label === "语音输入") {
-      setInput("请帮我规划一条少排队的黄鹤楼游览路线");
-    } else {
-      const result: AiResponse = {
-        text: "已识别示例图片为黄鹤楼相关场景，可继续询问票务、路线或讲解内容。",
-        cards: [{ id: "vision-demo-yellow-crane", title: "黄鹤楼识别结果", subtitle: "拍照识别为演示能力，未上传真实图片", href: "/spot/yellow-crane-tower", actionLabel: "查看详情" }],
-        toolCalls: [{ name: "拍照识别", status: "success", summary: "返回本地演示识别结果" }],
-        confidence: 0.72,
-        sourceNote: "当前仅使用本地示例识别说明，不代表真实图像识别或第三方视觉服务结果。"
-      };
-      onResult?.(result, label);
-      setMessages((prev) => [...prev, {
-        role: "ai",
-        text: result.text,
-        result
-      }]);
+  const startNewConversation = async () => {
+    const { conversationId } = await createConversation();
+    if (conversationId) conversationIdRef.current = conversationId;
+    setMessages([{
+      id: `greet-${Date.now()}`,
+      role: "assistant",
+      parts: [{ type: "text", text: "新对话已开启。告诉我目的地、同行人和时间，我来帮你检索、规划并同步到地图与行程页。" }]
+    } as AgentUIMessage]);
+    triggerOperation({ scope: "visitor", type: "assistant.new_conversation", label: "新对话" });
+  };
+
+  const speech = useSpeechInput({
+    onInterim: (text) => setInput(text),
+    onFinal: (text) => {
+      setInput(text);
+      submit(text);
     }
-    triggerOperation({ scope: "visitor", type: label === "语音输入" ? "voice.demo" : "vision.demo", label });
+  });
+
+  const activatePhotoDemo = () => {
+    const result: AiResponse = {
+      text: "已识别示例图片为黄鹤楼相关场景，可继续询问票务、路线或讲解内容。",
+      cards: [{ id: "vision-demo-yellow-crane", title: "黄鹤楼识别结果", subtitle: "拍照识别为演示能力，未上传真实图片", href: "/spot/yellow-crane-tower", actionLabel: "查看详情" }],
+      toolCalls: [{ name: "拍照识别", status: "success", summary: "返回本地演示识别结果" }],
+      confidence: 0.72,
+      sourceNote: "当前仅使用本地示例识别说明，不代表真实图像识别或第三方视觉服务结果。"
+    };
+    onResult?.(result, "拍照识别");
+    setMessages((current) => [...current, {
+      id: `vision-${Date.now()}`,
+      role: "assistant",
+      parts: [{ type: "text", text: result.text }],
+      metadata: { aiResponse: result }
+    } as AgentUIMessage]);
+    triggerOperation({ scope: "visitor", type: "vision.demo", label: "拍照识别" });
   };
 
   useEffect(() => {
     if (!promptRequest) return;
     setInput(promptRequest.text);
     if (promptRequest.autoSubmit) {
-      void submit(promptRequest.text);
+      submit(promptRequest.text);
     }
     onPromptRequestConsumed?.();
-    // submit intentionally reads the latest loading state; prompt ids prevent repeats.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [promptRequest?.id]);
 
   useEffect(() => {
-    const initialResult = [...messages].reverse().find((message) => message.role === "ai" && message.result)?.result;
-    if (initialResult) {
-      onResult?.(initialResult, "initial-demo");
-    }
-    // Only publish the seeded demo state once for the surrounding page chrome.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" });
-  }, [messages.length, loading, shouldReduceMotion]);
+  }, [messages, status, shouldReduceMotion]);
 
   return (
     <div className="card card-pad chat-shell">
+      <div className="chat-shell-head">
+        <span className="muted">多轮对话 · 工具调用实时可见</span>
+        <button className="ghost-btn" type="button" onClick={() => void startNewConversation()} disabled={busy}>
+          <Plus size={15} /> 新对话
+        </button>
+      </div>
       <div className="chat" ref={chatRef} aria-label="AI 对话记录">
-        {messages.map((message, index) => (
-          <motion.div
-            className={`bubble ${message.role === "user" ? "user" : "ai"}`}
-            key={`${message.role}-${index}`}
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
-            animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
-          >
-            {message.role === "ai" ? (
-              <div className="chat-message-head">
-                <span className="chat-avatar"><Bot size={16} /></span>
-                <div>
-                  <strong>AI助手</strong>
-                  <small>10:{32 + index}</small>
+        {messages.map((message, index) => {
+          const isUser = message.role === "user";
+          const aiResponse = message.metadata?.aiResponse;
+          const liveTools = toolPartsOf(message);
+          const finishedToolCalls = aiResponse?.toolCalls ?? [];
+          const isStreamingThis = !isUser && status === "streaming" && index === messages.length - 1 && !aiResponse;
+          return (
+            <motion.div
+              className={`bubble ${isUser ? "user" : "ai"}`}
+              key={message.id}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+            >
+              {!isUser ? (
+                <div className="chat-message-head">
+                  <span className="chat-avatar"><Bot size={16} /></span>
+                  <div>
+                    <strong>AI助手</strong>
+                    <small>{isStreamingThis ? "回复中" : "Agent v2"}</small>
+                  </div>
                 </div>
-              </div>
-            ) : null}
-            <p className="chat-message-text">{message.text}</p>
-            {message.role === "ai" ? (
-              <>
-                <div className="tool-row chat-tool-row">
-                  {(message.result?.toolCalls ?? [
-                    { name: "POI 知识库", status: "success", summary: "演示状态" },
-                    { name: "票务库存", status: "success", summary: "演示状态" }
-                  ]).map((tool) => (
-                    <span className="tool-call" key={`${tool.name}-${tool.summary}`}>
-                      {tool.status === "success" ? <CheckCircle2 size={14} /> : tool.status === "failed" ? <X size={14} /> : <Loader2 size={14} />}
-                      {tool.name}：{tool.summary}
-                    </span>
-                  ))}
-                </div>
-                {message.result?.cards.length ? (
-                  <div className="chat-result-grid">
-                    {message.result.cards.map((card) => (
-                      <a className="chat-result-card" href={card.href ?? "#"} key={card.id}>
-                        {card.image ? <img src={card.image} alt={card.title} /> : (
-                          <span className="chat-result-icon"><CalendarCheck size={24} /></span>
-                        )}
-                        <span className="chat-result-copy">
-                          <strong>{card.title}</strong>
-                          <p className="muted">{card.subtitle}</p>
+              ) : null}
+              {isUser
+                ? <p className="chat-message-text">{messageText(message)}</p>
+                : <MarkdownText text={messageText(message)} streaming={isStreamingThis} />}
+              {!isUser ? (
+                <>
+                  {(liveTools.length || finishedToolCalls.length) ? (
+                    <div className="tool-row chat-tool-row">
+                      {(aiResponse ? finishedToolCalls : []).map((tool, toolIndex) => (
+                        <span className={`tool-call ${tool.status}`} key={`${tool.name}-${toolIndex}`}>
+                          {tool.status === "success" ? <CheckCircle2 size={14} /> : tool.status === "failed" ? <X size={14} /> : <Loader2 size={14} />}
+                          {tool.name}：{tool.summary}
                         </span>
-                        {card.actionLabel ? <span className="chat-result-action">{card.actionLabel}<ChevronRight size={15} /></span> : null}
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-                {message.result ? (
-                  <div className="chat-source-note">
-                    <span className="chat-confidence">
-                      <small>置信度</small>
-                      <strong>{(message.result.confidence * 100).toFixed(0)}%</strong>
-                    </span>
-                    <div className="chat-source-copy">
-                      <ShieldCheck size={14} />
-                      <p>{message.result.sourceNote}</p>
+                      ))}
+                      {!aiResponse ? liveTools.map((tool) => (
+                        <span className={`tool-call ${tool.state === "output-error" ? "failed" : tool.state === "output-available" ? "success" : "running"}`} key={tool.key}>
+                          {tool.state === "output-available" ? <CheckCircle2 size={14} /> : tool.state === "output-error" ? <X size={14} /> : <Loader2 size={14} className="spin" />}
+                          {tool.label}{tool.state === "output-error" ? `：${tool.errorText ?? "失败"}` : tool.state === "output-available" ? "：完成" : "：调用中…"}
+                        </span>
+                      )) : null}
                     </div>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-          </motion.div>
-        ))}
-        {loading ? (
+                  ) : null}
+                  {aiResponse?.cards.length ? (
+                    <div className="chat-result-grid">
+                      {aiResponse.cards.map((card) => (
+                        <a className="chat-result-card" href={card.href ?? "#"} key={card.id}>
+                          {card.image ? <img src={card.image} alt={card.title} /> : (
+                            <span className="chat-result-icon"><CalendarCheck size={24} /></span>
+                          )}
+                          <span className="chat-result-copy">
+                            <strong>{card.title}</strong>
+                            <p className="muted">{card.subtitle}</p>
+                          </span>
+                          {card.actionLabel ? <span className="chat-result-action">{card.actionLabel}<ChevronRight size={15} /></span> : null}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                  {aiResponse ? (
+                    <div className="chat-source-note">
+                      <span className="chat-confidence">
+                        <small>置信度</small>
+                        <strong>{(aiResponse.confidence * 100).toFixed(0)}%</strong>
+                      </span>
+                      <div className="chat-source-copy">
+                        <ShieldCheck size={14} />
+                        <p>{aiResponse.sourceNote}</p>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </motion.div>
+          );
+        })}
+        {status === "submitted" ? (
           <motion.div className="bubble ai is-loading" initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}>
             <div className="chat-message-head">
               <span className="chat-avatar"><Bot size={16} /></span>
               <div>
                 <strong>AI助手</strong>
-                <small>检索中</small>
+                <small>思考中</small>
               </div>
             </div>
-            <p><Loader2 size={14} /> 正在检索 POI、票务与路线候选...</p>
+            <p><Loader2 size={14} className="spin" /> 正在理解问题并选择工具...</p>
           </motion.div>
         ) : null}
       </div>
@@ -418,25 +572,94 @@ export function AIChat({
         <span className="chat-composer-icon"><Bot size={18} /></span>
         <textarea
           aria-label="输入旅行助手问题"
-          placeholder="请输入你的问题..."
+          placeholder={speech.recording ? "正在聆听，请说话…" : "请输入你的问题..."}
           rows={1}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
-              void submit();
+              submit();
             }
           }}
         />
         <div className="chat-composer-tools" aria-label="输入辅助">
-          <button className="chat-tool-btn" type="button" aria-label="语音输入" onClick={() => activateDemoTool("语音输入")}><Mic size={17} /></button>
-          <button className="chat-tool-btn" type="button" aria-label="拍照识别" onClick={() => activateDemoTool("拍照识别")}><Camera size={17} /></button>
+          <button
+            className={`chat-tool-btn ${speech.recording ? "is-recording" : ""}`}
+            type="button"
+            aria-label={speech.recording ? "停止语音输入" : "语音输入"}
+            onClick={speech.toggle}
+          >
+            <Mic size={17} />
+          </button>
+          <button className="chat-tool-btn" type="button" aria-label="拍照识别" onClick={activatePhotoDemo}><Camera size={17} /></button>
         </div>
-        <button className="icon-btn" aria-label="发送问题" disabled={loading || !input.trim()} onClick={() => void submit()}><Send size={18} /></button>
+        <button className="icon-btn" aria-label="发送问题" disabled={busy || !input.trim()} onClick={() => submit()}><Send size={18} /></button>
       </div>
     </div>
   );
+}
+
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+};
+
+/** Browser-native zh-CN speech-to-text; gracefully degrades when unsupported. */
+function useSpeechInput({ onInterim, onFinal }: { onInterim: (text: string) => void; onFinal: (text: string) => void }) {
+  const [recording, setRecording] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  const stop = () => {
+    recognitionRef.current?.stop();
+    setRecording(false);
+  };
+
+  const toggle = () => {
+    if (recording) {
+      stop();
+      return;
+    }
+    const win = window as Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
+    const Ctor = win.SpeechRecognition ?? win.webkitSpeechRecognition;
+    if (!Ctor) {
+      window.dispatchEvent(new CustomEvent("ly:operation-result", {
+        detail: { status: "failed", message: "当前浏览器不支持语音识别，请使用 Chrome / Edge" }
+      }));
+      return;
+    }
+    const recognition = new Ctor();
+    recognition.lang = "zh-CN";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.onresult = (event) => {
+      let interim = "";
+      let final = "";
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (result.isFinal) final += result[0].transcript;
+        else interim += result[0].transcript;
+      }
+      if (final) onFinal(final.trim());
+      else if (interim) onInterim(interim.trim());
+    };
+    recognition.onend = () => setRecording(false);
+    recognition.onerror = () => setRecording(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setRecording(true);
+    triggerOperation({ scope: "visitor", type: "voice.input", label: "语音输入" });
+  };
+
+  useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  return { recording, toggle, stop };
 }
 
 export function TrafficChart({ type = "line" }: { type?: "line" | "area" | "bar"; }) {
@@ -559,7 +782,18 @@ type AMapInstance = {
   addControl: (control: unknown) => void;
   clearMap: () => void;
   destroy: () => void;
+  getAllOverlays?: (type?: string) => AMapOverlay[];
+  remove: (overlay: AMapOverlay | AMapOverlay[]) => void;
   setFitView: (overlays?: AMapOverlay[]) => void;
+};
+
+type AMapLngLat = { lng?: number; lat?: number; getLng?: () => number; getLat?: () => number };
+
+type AMapWalkingResult = { routes?: Array<{ steps?: Array<{ path?: AMapLngLat[] }> }> };
+
+type AMapWalking = {
+  // The SDK passes an error string instead of a result object when status is "error".
+  search: (from: [number, number], to: [number, number], callback: (status: string, result: AMapWalkingResult | string) => void) => void;
 };
 
 type AMapNamespace = {
@@ -569,6 +803,7 @@ type AMapNamespace = {
   Polyline: new (options: Record<string, unknown>) => AMapOverlay;
   Scale: new () => unknown;
   ToolBar: new (options?: Record<string, unknown>) => unknown;
+  Walking?: new (options?: Record<string, unknown>) => AMapWalking;
 };
 
 type AMapLoaderGlobal = {
@@ -636,7 +871,7 @@ export function MapPanel({
       .then((loader) => loader.load({
         key: amapKey,
         version: "2.0",
-        plugins: ["AMap.Scale", "AMap.ToolBar"]
+        plugins: ["AMap.Scale", "AMap.ToolBar", "AMap.Walking"]
       }))
       .then((AMap) => {
         if (cancelled || !containerRef.current) return;
@@ -646,13 +881,16 @@ export function MapPanel({
             zoom: compact ? 13 : 12,
             viewMode: "2D"
           });
+          if (import.meta.env.DEV) {
+            (window as AMapWindow & { __amapDebug?: { map: AMapInstance } }).__amapDebug = { map: mapRef.current };
+          }
         }
         if (!controlsAddedRef.current) {
           mapRef.current.addControl(new AMap.Scale());
           if (!compact) mapRef.current.addControl(new AMap.ToolBar({ position: "RB" }));
           controlsAddedRef.current = true;
         }
-        renderAmapOverlays(AMap, mapRef.current, points, route?.points ?? []);
+        renderAmapOverlays(AMap, mapRef.current, points, route?.points ?? [], () => cancelled);
         setMapState("ready");
       })
       .catch(() => {
@@ -736,19 +974,46 @@ function mapMarkerPoints(route: RouteResult | undefined, pois: Poi[]): MapPoint[
   ];
 }
 
-function renderAmapOverlays(AMap: AMapNamespace, map: AMapInstance, points: MapPoint[], routePoints: MapPoint[]) {
+const WALKING_MIN_INTERVAL_MS = 400; // ~2.5 QPS, under the ~3 QPS cap of personal AMap keys
+const WALKING_RETRY_LIMIT = 2;
+const WALKING_RETRY_BACKOFF_MS = 800;
+const WALKING_TIMEOUT_MS = 6000;
+const CONNECTOR_GAP_METERS = 30;
+
+type SegmentStatus = "pending" | "routed" | "unrouted";
+
+type RouteSegment = { from: MapPoint; to: MapPoint; status: SegmentStatus; line?: AMapOverlay };
+
+type WalkingOutcome =
+  | { kind: "path"; path: MapPoint[] }
+  | { kind: "no-route" }
+  | { kind: "transient" }
+  | { kind: "cancelled" };
+
+function renderAmapOverlays(AMap: AMapNamespace, map: AMapInstance, points: MapPoint[], routePoints: MapPoint[], isCancelled: () => boolean = () => false) {
   map.clearMap();
   const overlays: AMapOverlay[] = [];
-  const path = routePoints.length ? routePoints : points;
-  if (path.length > 1) {
-    overlays.push(new AMap.Polyline({
-      path: path.map((point) => [point.lng, point.lat]),
-      strokeColor: "#7ba7c8",
-      strokeOpacity: 0.86,
-      strokeWeight: 6,
-      lineJoin: "round",
-      lineCap: "round"
+  const anchors = routePoints.length ? routePoints : orderOpenTour(points);
+  // A dense path means the backend already returned a road-following
+  // polyline; a sparse one is just stop-to-stop straight segments.
+  const isDensePath = routePoints.length > points.length + 2;
+
+  let segments: RouteSegment[] = [];
+  if (anchors.length > 1 && isDensePath) {
+    overlays.push(createRoadPolyline(AMap, anchors));
+  } else if (anchors.length > 1) {
+    // Sparse legs render as dashed schematic lines first (never fake curves),
+    // then upgrade one by one to road-following paths.
+    const canUpgrade = Boolean(AMap.Walking);
+    segments = anchors.slice(1).map((to, index) => ({
+      from: anchors[index],
+      to,
+      status: (canUpgrade ? "pending" : "unrouted") as SegmentStatus
     }));
+    segments.forEach((segment) => {
+      segment.line = createSchematicPolyline(AMap, segment.from, segment.to, segment.status === "pending" ? "pending" : "unrouted");
+      overlays.push(segment.line);
+    });
   }
 
   points.slice(0, 12).forEach((point, index) => {
@@ -764,6 +1029,171 @@ function renderAmapOverlays(AMap: AMapNamespace, map: AMapInstance, points: MapP
     map.add(overlays);
     map.setFitView(overlays);
   }
+
+  if (segments.length && AMap.Walking) {
+    void upgradeSegmentsProgressively(AMap, map, segments, isCancelled);
+  }
+}
+
+// Swap each schematic leg for its road-following walking path as results
+// arrive. The camera is never re-fitted here, and after every await the
+// cancellation flag is re-checked so a superseded render can't draw onto a
+// map the next effect run has already cleared.
+async function upgradeSegmentsProgressively(AMap: AMapNamespace, map: AMapInstance, segments: RouteSegment[], isCancelled: () => boolean) {
+  for (const segment of segments) {
+    if (isCancelled()) return;
+    const path = await requestWalkingSegment(AMap, segment.from, segment.to, isCancelled);
+    if (isCancelled()) return;
+    if (segment.line) map.remove(segment.line);
+    if (path) {
+      segment.status = "routed";
+      segment.line = createRoadPolyline(AMap, path);
+      map.add(segment.line);
+      // POIs inside parks sit off the road network; bridge the gap between
+      // the marker and where the walkable path actually starts/ends.
+      if (metersBetween(segment.from, path[0]) > CONNECTOR_GAP_METERS) {
+        map.add(createConnectorPolyline(AMap, segment.from, path[0]));
+      }
+      if (metersBetween(segment.to, path[path.length - 1]) > CONNECTOR_GAP_METERS) {
+        map.add(createConnectorPolyline(AMap, segment.to, path[path.length - 1]));
+      }
+    } else {
+      segment.status = "unrouted";
+      segment.line = createSchematicPolyline(AMap, segment.from, segment.to, "unrouted");
+      map.add(segment.line);
+    }
+  }
+}
+
+function createRoadPolyline(AMap: AMapNamespace, path: MapPoint[]): AMapOverlay {
+  return new AMap.Polyline({
+    path: path.map((point) => [point.lng, point.lat]),
+    strokeColor: "#7ba7c8",
+    strokeOpacity: 0.9,
+    strokeWeight: 6,
+    strokeStyle: "solid",
+    lineJoin: "round",
+    lineCap: "round",
+    showDir: true,
+    zIndex: 60
+  });
+}
+
+function createSchematicPolyline(AMap: AMapNamespace, from: MapPoint, to: MapPoint, variant: "pending" | "unrouted"): AMapOverlay {
+  return new AMap.Polyline({
+    path: [[from.lng, from.lat], [to.lng, to.lat]],
+    strokeColor: variant === "pending" ? "#7ba7c8" : "#9aa9b2",
+    strokeOpacity: variant === "pending" ? 0.55 : 0.45,
+    strokeWeight: 4,
+    strokeStyle: "dashed",
+    strokeDasharray: [8, 6],
+    lineJoin: "round",
+    lineCap: "round",
+    showDir: false,
+    zIndex: 50
+  });
+}
+
+function createConnectorPolyline(AMap: AMapNamespace, from: MapPoint, to: MapPoint): AMapOverlay {
+  return new AMap.Polyline({
+    path: [[from.lng, from.lat], [to.lng, to.lat]],
+    strokeColor: "#8a9aa6",
+    strokeOpacity: 0.6,
+    strokeWeight: 2,
+    strokeStyle: "dashed",
+    strokeDasharray: [4, 6],
+    showDir: false,
+    zIndex: 55
+  });
+}
+
+const walkingSegmentCache = new Map<string, MapPoint[]>();
+let walkingQueueTail: Promise<void> = Promise.resolve();
+let lastWalkingRequestAt = 0;
+let sharedWalking: AMapWalking | undefined;
+let sharedWalkingOwner: AMapNamespace | undefined;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+// Serialize Walking requests (concurrency 1, >=400ms apart) so multi-leg
+// routes — possibly from several mounted MapPanels — stay under the QPS cap.
+function enqueueWalkingTask<T>(task: () => Promise<T>): Promise<T> {
+  const run = walkingQueueTail.then(async () => {
+    const wait = lastWalkingRequestAt + WALKING_MIN_INTERVAL_MS - Date.now();
+    if (wait > 0) await delay(wait);
+    lastWalkingRequestAt = Date.now();
+    return task();
+  });
+  walkingQueueTail = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+function getSharedWalking(AMap: AMapNamespace): AMapWalking | undefined {
+  if (!AMap.Walking) return undefined;
+  if (!sharedWalking || sharedWalkingOwner !== AMap) {
+    sharedWalking = new AMap.Walking({ hideMarkers: true, autoFitView: false });
+    sharedWalkingOwner = AMap;
+  }
+  return sharedWalking;
+}
+
+function walkingCacheKey(from: MapPoint, to: MapPoint): string {
+  return `${from.lng.toFixed(6)},${from.lat.toFixed(6)}|${to.lng.toFixed(6)},${to.lat.toFixed(6)}`;
+}
+
+async function requestWalkingSegment(AMap: AMapNamespace, from: MapPoint, to: MapPoint, isCancelled: () => boolean): Promise<MapPoint[] | undefined> {
+  const key = walkingCacheKey(from, to);
+  const cached = walkingSegmentCache.get(key);
+  if (cached) return cached;
+  for (let attempt = 0; attempt <= WALKING_RETRY_LIMIT; attempt += 1) {
+    const outcome = await enqueueWalkingTask<WalkingOutcome>(() =>
+      isCancelled() ? Promise.resolve({ kind: "cancelled" }) : searchWalkingOnce(AMap, from, to));
+    if (outcome.kind === "path") {
+      walkingSegmentCache.set(key, outcome.path);
+      return outcome.path;
+    }
+    if (outcome.kind === "no-route" || outcome.kind === "cancelled") return undefined;
+    if (attempt < WALKING_RETRY_LIMIT) await delay(WALKING_RETRY_BACKOFF_MS);
+  }
+  return undefined;
+}
+
+function searchWalkingOnce(AMap: AMapNamespace, from: MapPoint, to: MapPoint): Promise<WalkingOutcome> {
+  const walking = getSharedWalking(AMap);
+  if (!walking) return Promise.resolve({ kind: "no-route" });
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (outcome: WalkingOutcome) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(outcome);
+    };
+    const timer = window.setTimeout(() => finish({ kind: "transient" }), WALKING_TIMEOUT_MS);
+    walking.search([from.lng, from.lat], [to.lng, to.lat], (status, result) => {
+      if (status === "complete" && typeof result !== "string") {
+        const path: MapPoint[] = [];
+        result.routes?.[0]?.steps?.forEach((step) => {
+          step.path?.forEach((vertex) => {
+            const lng = typeof vertex.getLng === "function" ? vertex.getLng() : vertex.lng;
+            const lat = typeof vertex.getLat === "function" ? vertex.getLat() : vertex.lat;
+            if (Number.isFinite(lng) && Number.isFinite(lat)) path.push({ lng: lng as number, lat: lat as number });
+          });
+        });
+        return finish(path.length >= 2 ? { kind: "path", path } : { kind: "no-route" });
+      }
+      // "no_data" means no walkable route exists; anything else (QPS limit,
+      // network error) is transient and worth retrying.
+      if (status === "no_data") return finish({ kind: "no-route" });
+      return finish({ kind: "transient" });
+    });
+  });
+}
+
+function metersBetween(a: MapPoint, b: MapPoint): number {
+  return flatMeters(a, b);
 }
 
 function escapeHtml(value: string) {
@@ -833,7 +1263,7 @@ type VoucherPreviewProps = {
 export function VoucherPreview({
   title = `武汉文旅演示票务 · ${DEFAULT_TICKET_POI_NAME}`,
   ticketName = "成人票",
-  visitDate = "2026-06-06",
+  visitDate = todayISO(),
   slotTime = "08:00-10:00",
   quantity = 2,
   amount,

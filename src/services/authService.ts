@@ -55,14 +55,22 @@ function persistUser(user: DemoUser) {
   window.dispatchEvent(new CustomEvent("ly:role-change", { detail: user }));
 }
 
+// Empty API_BASE means same-origin /api (Vite dev proxy locally, reverse
+// proxy in production) — it does NOT mean there is no backend, so every
+// request below still fires and only falls back on actual failure.
+function authUrl(path: string) {
+  return API_BASE ? `${API_BASE}${path}` : path;
+}
+
 export async function fetchCurrentAuth(): Promise<AuthState> {
   const queryUser = getQueryUser();
-  if (queryUser) return { authenticated: false, user: queryUser };
-  if (!API_BASE) {
-    return { authenticated: false, user: getCurrentUser() };
+  if (queryUser) {
+    // ?role=xxx must also log in server-side, otherwise role-gated APIs
+    // (e.g. merchant voucher verification) reject with 403.
+    return await loginAsRole(queryUser.role);
   }
   try {
-    const response = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+    const response = await fetch(authUrl("/api/auth/me"), { credentials: "include" });
     if (!response.ok) throw new Error(`Auth request failed: ${response.status}`);
     const state = await response.json() as AuthState;
     const localUser = getCurrentUser();
@@ -83,11 +91,8 @@ function getQueryUser() {
 }
 
 export async function loginAsRole(role: Role, password = "sandbox"): Promise<AuthState> {
-  if (!API_BASE) {
-    return { authenticated: false, user: setCurrentRole(role) };
-  }
   try {
-    const response = await fetch(`${API_BASE}/api/auth/login`, {
+    const response = await fetch(authUrl("/api/auth/login"), {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -103,9 +108,7 @@ export async function loginAsRole(role: Role, password = "sandbox"): Promise<Aut
 }
 
 export async function logout() {
-  if (API_BASE) {
-    await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" }).catch(() => undefined);
-  }
+  await fetch(authUrl("/api/auth/logout"), { method: "POST", credentials: "include" }).catch(() => undefined);
   const user = demoUsers[0];
   persistUser(user);
   return user;

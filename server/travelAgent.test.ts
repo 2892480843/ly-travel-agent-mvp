@@ -162,4 +162,38 @@ describe("travelAgent", () => {
     expect(response.text).not.toContain("天气晴朗");
     expect(response.sourceNote).toContain("最终事实文本仍由工具结果 deterministic 生成");
   });
+
+  it("uses the model reply as the answer text when it passes guardrails", async () => {
+    const fetchImpl = vi.fn(async (_input: string, _init?: RequestInit) => new Response(JSON.stringify({
+      choices: [
+        { message: { content: "已为您整理黄鹤楼上午场的演示预约建议：建议九点前从西门入园，先观主楼再逛公园。" } }
+      ]
+    }), { status: 200 }));
+
+    const response = await runTravelAgent("帮我预约黄鹤楼上午票", {
+      mapProvider: createMapProvider({ pois, cities }, { provider: "amap", apiKey: "" }),
+      getTicketOptions: () => ({ products, slots }),
+      aiProvider: {
+        provider: "test-model",
+        baseURL: "https://model.example",
+        apiKey: "test-key",
+        fetchImpl
+      }
+    });
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(response.text).toContain("演示预约建议");
+    expect(response.sourceNote).toContain("test-model");
+    expect(response.sourceNote).toContain("由服务端模型");
+  });
+
+  it("exposes resolved stops as mapStops for the map page handover", async () => {
+    const response = await runTravelAgent("帮我规划黄鹤楼一日游", {
+      mapProvider: createMapProvider({ pois, cities }, { provider: "amap", apiKey: "" }),
+      getTicketOptions: () => ({ products, slots })
+    });
+
+    expect(response.mapStops?.length).toBeGreaterThanOrEqual(1);
+    expect(response.mapStops?.[0]).toMatchObject({ name: expect.any(String), lng: expect.any(Number), lat: expect.any(Number) });
+  });
 });

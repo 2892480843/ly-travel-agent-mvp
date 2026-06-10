@@ -7,6 +7,8 @@ import { DEFAULT_TICKET_ROUTE } from "../../config/city";
 import { demoUsers, fetchCurrentAuth, getCurrentUser, loginAsRole, roleLabel } from "../../services/authService";
 import { apiUrl } from "../../services/apiClient";
 import { triggerOperation, type OperationEventDetail } from "../../services/operationService";
+import { fetchServiceHealth, getLocalFallbackScopes, LOCAL_FALLBACK_EVENT, type ServiceHealth } from "../../services/serviceHealthService";
+import { IS_LIVE } from "../../config/appEnv";
 import type { DemoUser, OperationScope, Role } from "../../types";
 
 const topPaths = ["/", "/assistant", "/map", "/plan", DEFAULT_TICKET_ROUTE, "/recommend", "/packages", "/admin/dashboard"];
@@ -163,8 +165,73 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app">
       <TopNav />
+      <ServiceHealthBanner />
       <main className="page">{children}</main>
       <OperationToast />
+    </div>
+  );
+}
+
+const PROVIDER_LABELS: Record<string, string> = { map: "地图", ai: "AI 助手", payment: "支付", ticket: "票务" };
+const FALLBACK_SCOPE_LABELS: Record<string, string> = {
+  pois: "景点数据",
+  route: "路线规划",
+  tickets: "票务",
+  orders: "订单",
+  auth: "登录",
+  metrics: "运营指标",
+  operations: "操作回执"
+};
+
+// Only rendered in live mode: a real deployment must never silently pass
+// demo/fallback data off as production data.
+function ServiceHealthBanner() {
+  const [health, setHealth] = useState<ServiceHealth | undefined>();
+  const [fallbackScopes, setFallbackScopes] = useState<string[]>(() => getLocalFallbackScopes());
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!IS_LIVE) return;
+    let alive = true;
+    fetchServiceHealth(apiUrl("/api/health")).then((result) => {
+      if (alive) setHealth(result);
+    });
+    const listener = (event: Event) => {
+      setFallbackScopes((event as CustomEvent<{ scopes: string[] }>).detail.scopes);
+    };
+    window.addEventListener(LOCAL_FALLBACK_EVENT, listener);
+    return () => {
+      alive = false;
+      window.removeEventListener(LOCAL_FALLBACK_EVENT, listener);
+    };
+  }, []);
+
+  if (!IS_LIVE || dismissed) return null;
+
+  const unreachable = health?.reachable === false;
+  const demoProviders = Object.entries(health?.providers ?? {})
+    .filter(([, mode]) => mode !== "live")
+    .map(([key]) => PROVIDER_LABELS[key] ?? key);
+  const fallbackLabels = fallbackScopes.map((scope) => FALLBACK_SCOPE_LABELS[scope] ?? scope);
+
+  let tone: "danger" | "warning" | undefined;
+  let message = "";
+  if (unreachable) {
+    tone = "danger";
+    message = "无法连接后端服务：当前展示的内容为本地演示数据，不代表真实业务状态。";
+  } else if (fallbackLabels.length) {
+    tone = "warning";
+    message = `部分请求已降级为本地演示数据：${[...new Set(fallbackLabels)].join("、")}。`;
+  } else if (demoProviders.length) {
+    tone = "warning";
+    message = `以下能力当前为演示/降级模式：${demoProviders.join("、")}。生产使用前请完成真实服务接入。`;
+  }
+  if (!tone) return null;
+
+  return (
+    <div className={`service-health-banner ${tone}`} role="alert">
+      <span>{message}</span>
+      <button onClick={() => setDismissed(true)} aria-label="关闭服务状态提示" type="button">知道了</button>
     </div>
   );
 }

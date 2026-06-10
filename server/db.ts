@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { hashPassword } from "./security";
 import { DEFAULT_TICKET_DEMO_POI_ID } from "./config/city";
+import { addDaysISO, todayISO, upcomingDatesISO } from "./demoDates";
 
 let db: DatabaseSync | undefined;
 
@@ -93,9 +94,9 @@ export function seedDatabase() {
   `);
   database.prepare("DELETE FROM review_records WHERE id IN ('rv-merchant-yungu', 'rv-content-leifeng', 'rv-campaign-night')").run();
   [
-    ["rv-merchant-wuchang", "武昌城市酒店入驻", "武昌城市酒店", "商户入驻", "资质材料需复核", "待审核", "2026-06-02 10:18"],
-    ["rv-content-yellow-crane", "黄鹤楼演示票务活动页", "张运营", "内容发布", "需标注 sandbox 非真实库存/支付", "待审核", "2026-06-02 09:42"],
-    ["rv-campaign-riverfront", "江滩夜游专题", "李运营", "活动专题", "营销权益待确认", "审核中", "2026-06-01 18:20"]
+    ["rv-merchant-wuchang", "武昌城市酒店入驻", "武昌城市酒店", "商户入驻", "资质材料需复核", "待审核", `${todayISO()} 10:18`],
+    ["rv-content-yellow-crane", "黄鹤楼演示票务活动页", "张运营", "内容发布", "需标注 sandbox 非真实库存/支付", "待审核", `${todayISO()} 09:42`],
+    ["rv-campaign-riverfront", "江滩夜游专题", "李运营", "活动专题", "营销权益待确认", "审核中", `${addDaysISO(-1)} 18:20`]
   ].forEach((review) => insertReview.run(...review, now));
 
   seedTickets(database, now);
@@ -171,7 +172,7 @@ function seedTickets(database: DatabaseSync, now: string) {
   `);
   const stockByProduct: Record<string, number> = { adult: 180, student: 120, child: 80, senior: 18, care: 999 };
   const stockBySlot: Record<string, number> = { "08-10": 120, "10-12": 92, "12-14": 16, "14-16": 22, "16-1730": 80 };
-  const dates = ["2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-06", "2026-06-07", "2026-06-08", "2026-06-09", "2026-06-10"];
+  const dates = upcomingDatesISO(9);
   Object.keys(stockByProduct).forEach((productId) => {
     Object.keys(stockBySlot).forEach((slotId) => {
       dates.forEach((date) => {
@@ -383,9 +384,28 @@ CREATE TABLE IF NOT EXISTS operation_records (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '新对话',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content TEXT NOT NULL,
+  ui_message_json TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_ticket_locks_status_expires ON ticket_locks(status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action, created_at);
 CREATE INDEX IF NOT EXISTS idx_operation_records_scope_type ON operation_records(scope, type, created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conv ON chat_messages(conversation_id, id);
+CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id, updated_at);
 `;

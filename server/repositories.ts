@@ -4,6 +4,7 @@ import { getDb, withTransaction } from "./db";
 import { createPaymentProvider } from "./paymentProvider";
 import { getConfiguredPaymentProvider, getConfiguredTicketProvider, isProductionMode } from "./runtimeConfig";
 import { createTicketProvider, type TicketProvider } from "./ticketProvider";
+import { todayISO } from "./demoDates";
 
 export class DomainError extends Error {
   constructor(public status: number, message: string, public code = "domain_error") {
@@ -364,11 +365,11 @@ export function decideReview(id: string, status: "已通过" | "已驳回" | "�
   return { ok: true, id, status, remark };
 }
 
-export function getTicketOptions(poiId: string, visitDate = "2026-06-06") {
+export function getTicketOptions(poiId: string, visitDate = todayISO()) {
   return getActiveTicketProvider().getOptions(poiId, visitDate);
 }
 
-function getSandboxTicketOptions(poiId: string, visitDate = "2026-06-06") {
+function getSandboxTicketOptions(poiId: string, visitDate = todayISO()) {
   expireLocks();
   const products = getDb().prepare(`
     SELECT p.id, p.poi_id, p.name, p.description, p.price, p.status,
@@ -926,7 +927,7 @@ function operationMessage(label: string, type: string, status: OperationResult["
   const labelMessage = operationMessageForLabel(label);
   if (labelMessage) return labelMessage;
 
-  return status === "queued" ? `${label}已进入处理队列。` : `${label}已处理完成。`;
+  return status === "queued" ? `${label}已进入处理队列。` : `已收到「${label}」操作（演示模式，未发生真实业务变更）。`;
 }
 
 function operationMessageForLabel(label: string) {

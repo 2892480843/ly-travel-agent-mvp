@@ -22,11 +22,23 @@
 | `TICKET_API_BASE_URL` | 票务 provider API 地址 | 非 sandbox 必填 |
 | `TICKET_API_TOKEN` | 票务 provider token | 非 sandbox 必填 |
 | `TICKET_API_SECRET` | 票务 provider 签名或加密密钥 | 非 sandbox 必填 |
-| `VITE_API_BASE_URL` | 前端访问 API 地址 | `http://localhost:8787` |
+| `VITE_API_BASE_URL` | 前端访问 API 地址 | 留空（推荐）：同源 `/api` 经 Vite/反向代理转发；仅独立 API 域名时填绝对地址 |
+| `VITE_DATA_MODE` | 前端数据模式：`demo` 静默兜底 / `live` 标注演示内容并对服务故障弹横幅 | 留空自动：开发→`demo`，生产构建→`live` |
 | `VITE_PAYMENT_PROVIDER` | 前端创建支付时传递的 provider | 本地 `sandbox`；生产应与 `PAYMENT_PROVIDER` 对齐 |
 | `VITE_AMAP_JS_KEY` | 高德 JSAPI Web 端公开 Key，用于浏览器地图 | 按部署域名限制 |
 | `VITE_AMAP_SECURITY_JS_CODE` | 高德 JSAPI 安全密钥，本地开发可直接配置 | 生产优先代理 |
 | `VITE_AMAP_SERVICE_HOST` | 高德 JSAPI 代理地址，和安全密钥二选一 | 生产建议配置 |
+
+## 环境矩阵（demo vs live）
+
+系统的环境区分贯穿前后端两层，部署前请按此对照：
+
+| 维度 | 开发/演示（demo） | 真实部署（live/production） |
+|---|---|---|
+| 前端数据模式 | `VITE_DATA_MODE=demo`（或留空+dev server）：API 失败静默切本地演示数据 | `VITE_DATA_MODE=live`（或留空+生产构建）：后端不可达/请求降级时顶部显示警示横幅；硬编码演示内容（客流、出行提醒等）带「演示数据」徽标 |
+| 后端运行模式 | 默认：sandbox/fallback 仅产生 warn | `NODE_ENV=production`：启动即执行 `assertProductionRuntimeConfig`，弱密钥/沙箱支付/沙箱票务直接拒绝启动 |
+| 服务状态可观测 | `/api/health` 返回 `providers.{map,ai,payment,ticket}` 的真实运行态（live/sandbox/fallback）；启动日志打印 `[config]` 摘要 | 同左；前端 live 模式会消费该接口提示「以下能力为演示模式」 |
+| 验收命令 | `npm run readiness` | `npm run readiness:prod`（阻断式） |
 
 ## 初始化
 

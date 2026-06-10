@@ -6,7 +6,7 @@ import type { AiToolCall, City, GeneratedItineraryResponse, MapPoint, Order, Poi
 import { authenticateRequest, clearSession, loginWithRole, requireAuth, setSessionCookie } from "./auth";
 import { initializeDatabase } from "./db";
 import { createMapProvider, type MapProvider, type MapProviderMeta, type PoiSearchInput, type RouteRequest } from "./mapProvider";
-import { assertProductionRuntimeConfig } from "./runtimeConfig";
+import { assertProductionRuntimeConfig, getConfiguredPaymentProvider, getConfiguredTicketProvider } from "./runtimeConfig";
 import {
   applyPaymentStatus,
   cancelPayment,
@@ -35,7 +35,10 @@ import {
   verifyVoucher
 } from "./repositories";
 import { runTravelAgent } from "./travelAgent";
-import { DEFAULT_CITY_ID, DEFAULT_TICKET_DEMO_POI_ID, DEFAULT_TICKET_POI_NAME } from "./config/city";
+import { streamAgentChat } from "./agentRuntime";
+import type { AgentDeps } from "./agentTools";
+import { getOrCreateConversation, listUiMessages } from "./conversationStore";
+import { DEFAULT_CITY_CENTER, DEFAULT_CITY_ID, DEFAULT_TICKET_DEMO_POI_ID, DEFAULT_TICKET_POI_NAME } from "./config/city";
 
 const root = process.cwd();
 loadLocalEnv(root);
@@ -46,6 +49,11 @@ const pois = readJson<Poi[]>("poi-data/usable-pois.json");
 const cityDoc = readJson<{ cities: City[] }>("poi-data/china-prefecture-cities.json");
 const mapProvider = createMapProvider({ pois, cities: cityDoc.cities });
 const loggedMapProvider = createLoggedMapProvider(mapProvider);
+const agentDeps: AgentDeps = {
+  mapProvider: loggedMapProvider,
+  getTicketOptions,
+  generateItinerary: (input) => generateItineraryPlan(input)
+};
 
 initializeDatabase();
 
@@ -63,7 +71,20 @@ const server = http.createServer(async (request, response) => {
     const auth = authenticateRequest(request);
 
     if (request.method === "GET" && url.pathname === "/api/health") {
-      sendJson(response, { ok: true, service: "ly-production-api", poiCount: pois.length, cityCount: cityDoc.cities.length });
+      // Providers report their REAL operating mode so a live frontend can
+      // surface which capabilities are still demo/sandbox.
+      sendJson(response, {
+        ok: true,
+        service: "ly-production-api",
+        poiCount: pois.length,
+        cityCount: cityDoc.cities.length,
+        providers: {
+          map: process.env.MAP_PROVIDER === "amap" && process.env.MAP_API_KEY ? "live" : "fallback",
+          ai: process.env.AI_PROVIDER && process.env.AI_PROVIDER !== "fallback" && process.env.AI_API_KEY ? "live" : "fallback",
+          payment: getConfiguredPaymentProvider() === "sandbox" ? "sandbox" : "live",
+          ticket: getConfiguredTicketProvider() === "sandbox" ? "sandbox" : "live"
+        }
+      });
       return;
     }
 
@@ -91,7 +112,10 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && url.pathname === "/api/pois") {
-      sendJson(response, searchPois(url));
+      // Real provider data when MAP_API_KEY is configured; the provider
+      // falls back to the curated local dataset on its own otherwise.
+      const result = await loggedMapProvider.searchPois(mapSearchInput(url));
+      sendJson(response, result.items);
       return;
     }
 
@@ -109,7 +133,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && url.pathname === "/api/itineraries/generate") {
-      const body = await readBody<{ days?: number; preferences?: string[]; cityId?: string }>(request);
+      const body = await readBody<{ days?: number; preferences?: string[]; cityId?: string; stops?: MapPoint[] }>(request);
       sendJson(response, await generateItineraryPlan(body));
       return;
     }
@@ -120,6 +144,40 @@ const server = http.createServer(async (request, response) => {
         mapProvider: loggedMapProvider,
         getTicketOptions
       }));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/agent/chat/stream") {
+      const body = await readBody<{ input?: string; conversationId?: string; newConversation?: boolean }>(request);
+      const inputText = (body.input ?? "").trim();
+      if (!inputText) return sendError(response, 400, "input is required");
+      const clientAbort = new AbortController();
+      request.on("close", () => clientAbort.abort());
+      await streamAgentChat({
+        text: inputText,
+        ctx: {
+          userId: auth.user?.id ?? "visitor",
+          conversationId: body.conversationId,
+          newConversation: body.newConversation,
+          abortSignal: clientAbort.signal
+        },
+        deps: agentDeps,
+        response
+      });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/agent/conversations/latest") {
+      const userId = auth.user?.id ?? "visitor";
+      const conversation = getOrCreateConversation(userId);
+      sendJson(response, { conversationId: conversation.id, title: conversation.title, messages: listUiMessages(conversation.id) });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/agent/conversations") {
+      const userId = auth.user?.id ?? "visitor";
+      const conversation = getOrCreateConversation(userId, undefined, true);
+      sendJson(response, { conversationId: conversation.id }, 201);
       return;
     }
 
@@ -343,6 +401,20 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(port, () => {
   console.log(`ly-production-api listening on http://localhost:${port}`);
+  // Config summary so a stale process / unloaded .env is obvious at startup.
+  const aiProvider = process.env.AI_PROVIDER || "fallback";
+  const mapProvider = process.env.MAP_PROVIDER || "fallback";
+  console.log(`[config] AI:  provider=${aiProvider} model=${process.env.AI_MODEL || "demo-local"} key=${process.env.AI_API_KEY ? "set" : "MISSING"}`);
+  console.log(`[config] Map: provider=${mapProvider} key=${process.env.MAP_API_KEY ? "set" : "MISSING"}`);
+});
+
+server.on("error", (error: NodeJS.ErrnoException) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`[fatal] 端口 ${port} 已被占用：可能有旧的后端进程仍在运行（其配置可能是过期的）。`);
+    console.error(`        Windows 查占用：Get-NetTCPConnection -LocalPort ${port} -State Listen | % { Get-Process -Id $_.OwningProcess }`);
+    process.exit(1);
+  }
+  throw error;
 });
 
 function readJson<T>(relativePath: string): T {
@@ -356,7 +428,9 @@ function loadLocalEnv(cwd: string) {
       const match = line.trim().match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.*)$/);
       if (!match) return;
       const [, key, rawValue] = match;
-      if (process.env[key] !== undefined) return;
+      // Real (non-empty) process env wins; an empty string counts as unset
+      // so a stray `set AI_PROVIDER=` cannot mask the .env value.
+      if (process.env[key] !== undefined && process.env[key] !== "") return;
       process.env[key] = unquoteEnvValue(rawValue);
     });
   } catch (error) {
@@ -373,12 +447,32 @@ function unquoteEnvValue(value: string) {
   return commentIndex >= 0 ? trimmed.slice(0, commentIndex).trim() : trimmed;
 }
 
-async function generateItineraryPlan(input: { days?: number; preferences?: string[]; cityId?: string }): Promise<GeneratedItineraryResponse> {
+async function generateItineraryPlan(input: { days?: number; preferences?: string[]; cityId?: string; stops?: MapPoint[] }): Promise<GeneratedItineraryResponse> {
   const cityId = input.cityId ?? DEFAULT_CITY_ID;
   const days = clampInteger(input.days ?? 3, 1, 5);
   const preferences = normalizeItineraryPreferences(input.preferences);
   const cityPois = pois.filter((poi) => poi.cityId === cityId);
-  const selectedPois = selectItineraryPois(cityPois, preferences, days * 3);
+
+  // Three-tier POI sourcing: caller-pinned stops (assistant/map handover)
+  // > live provider search by preference > curated local dataset.
+  const pinnedStops = (input.stops ?? [])
+    .filter((stop) => Number.isFinite(stop?.lng) && Number.isFinite(stop?.lat))
+    .slice(0, 15);
+  let selectedPois: Poi[];
+  let poiSourceSummary: string;
+  if (pinnedStops.length >= 2) {
+    selectedPois = pinnedStops.map((stop, index) => pinnedStopToPoi(stop, index, cityId));
+    poiSourceSummary = `按调用方传入的 ${selectedPois.length} 个地点编排（AI 助手/导览联动）`;
+  } else {
+    const livePois = await searchLiveItineraryPois(preferences, cityId, days * 3);
+    if (livePois.length >= 3) {
+      selectedPois = livePois;
+      poiSourceSummary = `地图 provider 实时检索 ${livePois.length} 个候选，偏好：${preferences.join("、")}`;
+    } else {
+      selectedPois = selectItineraryPois(cityPois, preferences, days * 3);
+      poiSourceSummary = `provider 不可用，本地精选数据集兜底 ${selectedPois.length} 个候选`;
+    }
+  }
   const routeResult = await loggedMapProvider.route({
     cityId,
     mode: walkingMode(preferences),
@@ -393,7 +487,7 @@ async function generateItineraryPlan(input: { days?: number; preferences?: strin
     {
       name: "POI 候选编排",
       status: selectedPois.length ? "success" : "failed",
-      summary: `从 ${cityPois.length} 个城市 POI 中按 ${preferences.join("、")} 选出 ${selectedPois.length} 个候选`
+      summary: poiSourceSummary
     },
     {
       name: "路线约束",
@@ -445,25 +539,64 @@ async function generateItineraryPlan(input: { days?: number; preferences?: strin
     },
     items: buildItineraryItems(selectedPois, days, preferences, weatherResult.summary, cityId),
     sourceNote: `服务端 Itinerary Agent 已编排 POI、路线、天气和 sandbox 票务候选；${routeResult.fallback || !weatherResult.live ? "部分工具为 fallback，" : ""}易变信息以官方渠道为准。`,
-    toolCalls
+    toolCalls,
+    // Stops handover for the map page (智能导览跨页联动).
+    mapStops: selectedPois.slice(0, 8)
+      .filter((poi) => Number.isFinite(poi.lng) && Number.isFinite(poi.lat))
+      .map((poi) => ({ name: poi.name, lng: poi.lng, lat: poi.lat }))
   };
 }
 
-function searchPois(url: URL) {
-  const keyword = url.searchParams.get("keyword")?.trim().toLowerCase() ?? "";
-  const cityId = url.searchParams.get("cityId") ?? DEFAULT_CITY_ID;
-  const category = url.searchParams.get("category") as PoiCategory | null;
-  const limit = Math.min(Number(url.searchParams.get("limit") ?? 24), 100);
+// Mixes one live provider search per preferred category (throttled and
+// cached inside the provider), interleaving results so each day gets a
+// blend instead of three of the same kind.
+async function searchLiveItineraryPois(preferences: string[], cityId: string, limit: number): Promise<Poi[]> {
+  const categories: PoiCategory[] = [];
+  if (preferences.some((item) => item.includes("历史") || item.includes("文化"))) categories.push("文化艺术");
+  if (preferences.some((item) => item.includes("自然") || item.includes("风光"))) categories.push("公园自然");
+  if (preferences.some((item) => item.includes("美食"))) categories.push("美食");
+  if (preferences.some((item) => item.includes("亲子"))) categories.push("亲子游");
+  if (!categories.includes("景点")) categories.unshift("景点");
+  try {
+    const results = await Promise.all(categories.map((category) =>
+      loggedMapProvider.searchPois({
+        cityId,
+        category,
+        lng: DEFAULT_CITY_CENTER.lng,
+        lat: DEFAULT_CITY_CENTER.lat,
+        radius: 12000,
+        limit: Math.max(3, Math.ceil(limit / categories.length))
+      })
+    ));
+    const lists = results.map((result) => result.items);
+    const merged: Poi[] = [];
+    const seen = new Set<string>();
+    for (let index = 0; merged.length < limit && lists.some((list) => index < list.length); index += 1) {
+      for (const list of lists) {
+        const poi = list[index];
+        if (poi && !seen.has(poi.id) && merged.length < limit) {
+          seen.add(poi.id);
+          merged.push(poi);
+        }
+      }
+    }
+    return merged;
+  } catch {
+    return [];
+  }
+}
 
-  return pois
-    .filter((poi) => {
-      const text = [poi.name, poi.address, poi.category, poi.description, ...poi.tags].join(" ").toLowerCase();
-      return (!keyword || text.includes(keyword))
-        && (!cityId || poi.cityId === cityId)
-        && (!category || poi.category === category);
-    })
-    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-    .slice(0, limit);
+function pinnedStopToPoi(stop: MapPoint, index: number, cityId: string): Poi {
+  return {
+    id: `pinned-${index}`,
+    name: stop.name ?? `地点 ${index + 1}`,
+    cityId,
+    category: "景点",
+    tags: ["联动地点"],
+    lng: stop.lng,
+    lat: stop.lat,
+    coordinateSystem: "GCJ-02"
+  };
 }
 
 function clampInteger(value: number, min: number, max: number) {
