@@ -2314,8 +2314,42 @@ textarea.field {
   box-shadow: 0 14px 30px rgba(15, 61, 53, 0.22);
 }
 
-.bubble.is-loading svg {
-  animation: loader-spin 1s linear infinite;
+.chat-typing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: rgba(31, 41, 38, 0.62);
+}
+
+.chat-typing .typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  opacity: 0.35;
+  animation: typing-bounce 1.2s ease-in-out infinite;
+}
+
+.chat-typing .typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-typing .typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+  margin-right: 4px;
+}
+
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-typing .typing-dot {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 .tool-row {
@@ -2685,6 +2719,7 @@ textarea.field {
 
 .map-nearby-row {
   min-width: 0;
+  width: 100%;
   display: grid;
   grid-template-columns: 62px minmax(0, 1fr) auto;
   gap: 9px;
@@ -2693,7 +2728,20 @@ textarea.field {
   border: 1px solid rgba(39, 50, 44, 0.09);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.68);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.map-nearby-row.active {
+  border-color: color-mix(in srgb, var(--green) 55%, var(--line));
+  background: color-mix(in srgb, var(--green) 10%, #fff);
+}
+
+.map-nearby-row.active b {
+  color: var(--green-strong, var(--green));
 }
 
 .map-nearby-row:hover {
@@ -10747,6 +10795,30 @@ textarea.field {
   white-space: nowrap;
   color: rgba(31, 41, 38, 0.66);
   font-size: 12px;
+}
+
+.map-intent-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.map-intent-day {
+  padding: 4px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.map-intent-day.active {
+  color: #fff;
+  border-color: transparent;
+  background: var(--green);
 }
 
 .map-intent-close {

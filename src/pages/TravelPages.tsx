@@ -68,7 +68,7 @@ import { triggerOperation } from "../services/operationService";
 import { filterRecommendedPois, poiToScenicSpot, recommendationFilters, type RecommendationFilter, statusForStock } from "../services/poiService";
 import { validateTicketSelection } from "../services/ticketService";
 import { addDaysISO, monthDay, todayISO, upcomingDatesISO } from "../utils/demoDates";
-import { orderOpenTourBy } from "../utils/tour";
+import { flatMeters, orderOpenTourBy } from "../utils/tour";
 import { clearTourIntent, readTourIntent, saveTourIntent } from "../services/tourIntentService";
 import { BRAND_HERO_EYEBROW, BRAND_NAME } from "../config/brand";
 import {
@@ -813,9 +813,14 @@ export function PlanPage() {
       setDay("Day 1");
       setGeneratedMessage(`Agent 已生成 ${result.days} 天 ${result.items.length} 个日程节点：${result.sourceNote}`);
       // Persist the final plan stops so the map page (智能导览) can render
-      // exactly this itinerary.
+      // exactly this itinerary, day by day for multi-day plans.
       if (result.mapStops && result.mapStops.length >= 2) {
-        saveTourIntent({ source: "itinerary", label: result.title, stops: result.mapStops });
+        saveTourIntent({
+          source: "itinerary",
+          label: result.title,
+          stops: result.mapStopsByDay?.[0]?.stops ?? result.mapStops,
+          days: result.mapStopsByDay
+        });
       }
     } catch (error) {
       setGeneratedMessage(error instanceof Error ? `服务端生成失败：${error.message}` : "服务端生成失败。");
@@ -1843,17 +1848,26 @@ export function MapPage() {
   const [route, setRoute] = useState<RouteResult | undefined>();
   const [mapNotice, setMapNotice] = useState("");
   const [routeRefreshTick, setRouteRefreshTick] = useState(0);
+  // Which stop the detail panel shows; driven by marker / list clicks.
+  const [selectedIndex, setSelectedIndex] = useState(0);
   // A plan handed over from the AI assistant takes priority over the
   // mode-based default selection until the visitor dismisses it.
   const [tourIntent, setTourIntent] = useState(() => readTourIntent());
+  // Multi-day plans tour one day at a time.
+  const [intentDayIndex, setIntentDayIndex] = useState(0);
+  const intentDays = (tourIntent?.days?.length ?? 0) > 1 ? tourIntent!.days! : undefined;
   const dismissTourIntent = () => {
     clearTourIntent();
     setTourIntent(undefined);
+    setIntentDayIndex(0);
   };
 
   useEffect(() => {
+    setSelectedIndex(0);
     if (tourIntent) {
-      const stops = orderOpenTourBy(tourIntent.stops, (stop) => stop);
+      const dayStops = intentDays?.[Math.min(intentDayIndex, intentDays.length - 1)]?.stops;
+      const sourceStops = dayStops?.length ? dayStops : tourIntent.stops;
+      const stops = orderOpenTourBy(sourceStops, (stop) => stop);
       setPois(stops.map((stop, index) => ({
         id: `tour-intent-${index}`,
         name: stop.name ?? `地点 ${index + 1}`,
@@ -1879,7 +1893,8 @@ export function MapPage() {
     return () => {
       alive = false;
     };
-  }, [mode, tourIntent]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, tourIntent, intentDayIndex]);
 
   useEffect(() => {
     // Route through the exact POIs shown on the map, in marker order.
@@ -1894,9 +1909,13 @@ export function MapPage() {
     }).then(setRoute).catch(() => setRoute(undefined));
   }, [mode, pois, routeRefreshTick]);
 
-  const routePois = pois.length ? pois : [];
   const routeSummary = route ? `约 ${(route.distanceMeters / 1000).toFixed(1)} 公里 · ${route.durationMinutes} 分钟 · ${route.provider}${route.fallback ? " fallback" : ""}` : "路线服务加载中";
-  const nearbySpots = routePois.length ? routePois.slice(1, 4).map(poiToScenicSpot) : scenicSpots.slice(1, 4);
+  // Detail panel follows the clicked marker / list row.
+  const selectedPoi = pois[selectedIndex] ?? pois[0];
+  const selectedSpot = selectedPoi ? poiToScenicSpot(selectedPoi) : undefined;
+  const selectedDistanceKm = selectedPoi ? flatMeters(DEFAULT_CITY_CENTER, selectedPoi) / 1000 : undefined;
+  const selectedWalkMinutes = selectedDistanceKm !== undefined ? Math.max(1, Math.round((selectedDistanceKm * 1000) / 75)) : undefined;
+  const selectedSupportsTickets = Boolean(selectedPoi?.name.includes("黄鹤楼"));
   const toggleLayer = (label: MapLayerLabel) => {
     setActiveLayers((current) => {
       const next = new Set(current);
@@ -1923,7 +1942,7 @@ export function MapPage() {
   return (
     <div className="map-layout map-fullscreen" aria-label="智能导览地图工作台">
       <h1 className="sr-only">智能导览</h1>
-      <MapPanel scenic pois={pois} route={route} />
+      <MapPanel scenic pois={pois} route={route} onMarkerClick={setSelectedIndex} />
       <div className="map-overlay-grid">
         <aside className="map-surface map-control-panel" aria-label="路线与图层控制">
           {tourIntent ? (
@@ -1931,6 +1950,22 @@ export function MapPage() {
               <div className="map-intent-copy">
                 <strong>{tourIntent.source === "assistant" ? "来自 AI 助手的规划" : "来自行程规划"}</strong>
                 <small title={tourIntent.label}>{tourIntent.label}</small>
+                {intentDays ? (
+                  <div className="map-intent-days" role="tablist" aria-label="按天切换导览">
+                    {intentDays.map((group, index) => (
+                      <button
+                        className={`map-intent-day ${index === intentDayIndex ? "active" : ""}`}
+                        key={group.day}
+                        onClick={() => setIntentDayIndex(index)}
+                        role="tab"
+                        aria-selected={index === intentDayIndex}
+                        type="button"
+                      >
+                        {group.day}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <button className="map-intent-close" onClick={dismissTourIntent} aria-label="退出该规划，恢复模式推荐" type="button">恢复推荐</button>
             </div>
@@ -1975,43 +2010,70 @@ export function MapPage() {
           </div>
         </aside>
 
-        <aside className="map-surface map-place-panel" aria-label={`${DEFAULT_TICKET_POI_NAME}景点详情`}>
-          <div className="map-place-head">
-            <div>
-              <h2>{DEFAULT_TICKET_POI_NAME}</h2>
-              <p>距当前位置 1.2 公里 · 步行约 18 分钟 <DemoDataBadge /></p>
-            </div>
-            <StatusTag tone="orange">较拥挤 76%</StatusTag>
-          </div>
-          <img className="map-place-image" src={spotImages.yellowCraneTower} alt={DEFAULT_TICKET_POI_NAME} />
-          <div className="scenic-callout-tags"><StatusTag>历史文化</StatusTag><StatusTag tone="orange">热门景点</StatusTag></div>
-          <div className="scenic-callout-info">
-            <div className="scenic-price-head">
-              <span><Ticket size={14} />演示票价</span>
-            </div>
-            <div className="scenic-price-grid">
-              <span>成人 <b>￥40</b></span>
-              <span>学生 <b>￥20</b></span>
-            </div>
-            <p><ShieldCheck size={14} />sandbox 演示价，非官方真实票价。</p>
-          </div>
-          <div className="scenic-callout-actions">
-            <Link className="primary-btn" to={DEFAULT_TICKET_ROUTE}><Navigation size={17} />去这里</Link>
-            <button className="ghost-btn" onClick={() => runMapAction("语音讲解")}><Headphones size={16} />语音讲解</button>
-          </div>
-          <div className="map-nearby-list">
-            <h3>附近推荐</h3>
-            {nearbySpots.map((spot) => (
-              <Link className="map-nearby-row" to="/spot/yellow-crane-tower" key={spot.name}>
-                <img src={spot.image} alt={spot.name} />
-                <span>
-                  <strong>{spot.name}</strong>
-                  <small>{spot.crowd} · {spot.price ? `￥${spot.price}` : "免费"} · {spot.tags[0]}</small>
-                </span>
-                <b>★ {spot.rating}</b>
-              </Link>
-            ))}
-          </div>
+        <aside className="map-surface map-place-panel" aria-label={`${selectedPoi?.name ?? "景点"}详情`}>
+          {selectedPoi && selectedSpot ? (
+            <>
+              <div className="map-place-head">
+                <div>
+                  <h2>{selectedPoi.name}</h2>
+                  <p>距市中心约 {selectedDistanceKm?.toFixed(1)} 公里 · 步行约 {selectedWalkMinutes} 分钟（直线估算）</p>
+                </div>
+                <StatusTag tone={selectedSpot.crowd === "舒适" ? "green" : "orange"}>{selectedSpot.crowd}</StatusTag>
+              </div>
+              <img className="map-place-image" src={selectedSpot.image} alt={selectedPoi.name} />
+              <div className="scenic-callout-tags">
+                <StatusTag>{selectedPoi.category}</StatusTag>
+                {selectedPoi.tags.slice(0, 2).map((tag) => <StatusTag tone="orange" key={tag}>{tag}</StatusTag>)}
+                <DemoDataBadge label="客流为演示估算" />
+              </div>
+              {selectedSupportsTickets ? (
+                <div className="scenic-callout-info">
+                  <div className="scenic-price-head">
+                    <span><Ticket size={14} />演示票价</span>
+                  </div>
+                  <div className="scenic-price-grid">
+                    <span>成人 <b>￥40</b></span>
+                    <span>学生 <b>￥20</b></span>
+                  </div>
+                  <p><ShieldCheck size={14} />sandbox 演示价，非官方真实票价。</p>
+                </div>
+              ) : (
+                <div className="scenic-callout-info">
+                  <p><MapPin size={14} />{selectedPoi.address ?? "地址以地图标注为准"}</p>
+                  <p><ShieldCheck size={14} />该景点未接入 sandbox 演示票务，门票与预约以官方渠道为准。</p>
+                </div>
+              )}
+              <div className="scenic-callout-actions">
+                {selectedSupportsTickets
+                  ? <Link className="primary-btn" to={DEFAULT_TICKET_ROUTE}><Navigation size={17} />去预约</Link>
+                  : <button className="primary-btn" onClick={() => runMapAction(`前往${selectedPoi.name}`)} type="button"><Navigation size={17} />去这里</button>}
+                <button className="ghost-btn" onClick={() => runMapAction("语音讲解")}><Headphones size={16} />语音讲解</button>
+              </div>
+              <div className="map-nearby-list">
+                <h3>本线路站点</h3>
+                {pois.map((poi, index) => {
+                  const spot = poiToScenicSpot(poi);
+                  return (
+                    <button
+                      className={`map-nearby-row ${index === selectedIndex ? "active" : ""}`}
+                      key={poi.id}
+                      onClick={() => setSelectedIndex(index)}
+                      type="button"
+                    >
+                      <img src={spot.image} alt={poi.name} />
+                      <span>
+                        <strong>{index + 1}. {poi.name}</strong>
+                        <small>{spot.crowd} · {poi.rating ? `★ ${poi.rating}` : poi.category}</small>
+                      </span>
+                      <b>{index === selectedIndex ? "查看中" : "查看"}</b>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p className="muted">线路站点加载中...</p>
+          )}
         </aside>
 
         <section className="map-surface map-route-panel" aria-label="推荐路线">

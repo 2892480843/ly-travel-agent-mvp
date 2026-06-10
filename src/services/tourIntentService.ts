@@ -5,6 +5,8 @@ export type TourIntent = {
   /** Human-readable origin, e.g. the question that produced the plan. */
   label: string;
   stops: MapPoint[];
+  /** Multi-day plans: per-day stop groups; `stops` then holds day 1. */
+  days?: Array<{ day: string; stops: MapPoint[] }>;
   createdAt: number;
 };
 

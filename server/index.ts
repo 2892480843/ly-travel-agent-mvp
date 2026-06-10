@@ -540,10 +540,18 @@ async function generateItineraryPlan(input: { days?: number; preferences?: strin
     items: buildItineraryItems(selectedPois, days, preferences, weatherResult.summary, cityId),
     sourceNote: `服务端 Itinerary Agent 已编排 POI、路线、天气和 sandbox 票务候选；${routeResult.fallback || !weatherResult.live ? "部分工具为 fallback，" : ""}易变信息以官方渠道为准。`,
     toolCalls,
-    // Stops handover for the map page (智能导览跨页联动).
+    // Stops handover for the map page (智能导览跨页联动): flat list for
+    // single-day consumers plus per-day groups (same day split as the
+    // timeline) so multi-day plans can be toured day by day.
     mapStops: selectedPois.slice(0, 8)
       .filter((poi) => Number.isFinite(poi.lng) && Number.isFinite(poi.lat))
-      .map((poi) => ({ name: poi.name, lng: poi.lng, lat: poi.lat }))
+      .map((poi) => ({ name: poi.name, lng: poi.lng, lat: poi.lat })),
+    mapStopsByDay: Array.from({ length: days }, (_, dayIndex) => ({
+      day: `Day ${dayIndex + 1}`,
+      stops: selectedPois.slice(dayIndex * 3, dayIndex * 3 + 3)
+        .filter((poi) => Number.isFinite(poi.lng) && Number.isFinite(poi.lat))
+        .map((poi) => ({ name: poi.name, lng: poi.lng, lat: poi.lat }))
+    })).filter((group) => group.stops.length >= 1)
   };
 }
 

@@ -355,11 +355,16 @@ export function AIChat({
         if (meta?.conversationId) conversationIdRef.current = meta.conversationId;
       }
       if (dataPart.type === "data-action") {
-        const action = dataPart.data as { type?: string; label?: string; stops?: MapPoint[] };
+        const action = dataPart.data as { type?: string; label?: string; stops?: MapPoint[]; days?: Array<{ day: string; stops: MapPoint[] }> };
         if (action?.type === "tour-intent" && action.stops && action.stops.length >= 2) {
-          saveTourIntent({ source: "assistant", label: action.label ?? lastPromptRef.current, stops: action.stops });
+          saveTourIntent({
+            source: "assistant",
+            label: action.label ?? lastPromptRef.current,
+            stops: action.days?.[0]?.stops?.length ? action.days[0].stops : action.stops,
+            days: action.days
+          });
           window.dispatchEvent(new CustomEvent("ly:operation-result", {
-            detail: { status: "completed", message: `已将 ${action.stops.length} 个地点同步到智能导览页` }
+            detail: { status: "completed", message: action.days?.length && action.days.length > 1 ? `已将 ${action.days.length} 天行程同步到智能导览页` : `已将 ${action.stops.length} 个地点同步到智能导览页` }
           }));
         }
       }
@@ -564,7 +569,10 @@ export function AIChat({
                 <small>思考中</small>
               </div>
             </div>
-            <p><Loader2 size={14} className="spin" /> 正在理解问题并选择工具...</p>
+            <p className="chat-typing">
+              <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+              正在理解问题并选择工具...
+            </p>
           </motion.div>
         ) : null}
       </div>
@@ -824,16 +832,22 @@ export function MapPanel({
   compact = false,
   scenic = false,
   pois = [],
-  route
+  route,
+  onMarkerClick
 }: {
   compact?: boolean;
   scenic?: boolean;
   pois?: Poi[];
   route?: RouteResult;
+  /** Fired with the marker's index in `pois` when a numbered pin is clicked. */
+  onMarkerClick?: (index: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<AMapInstance | null>(null);
   const controlsAddedRef = useRef(false);
+  // Ref so marker click handlers stay fresh without re-running the map effect.
+  const markerClickRef = useRef(onMarkerClick);
+  markerClickRef.current = onMarkerClick;
   const [mapState, setMapState] = useState<"fallback" | "loading" | "ready">("fallback");
   const staticPins = [
     ["黄鹤楼", 52, 54, "blue"],
@@ -890,7 +904,7 @@ export function MapPanel({
           if (!compact) mapRef.current.addControl(new AMap.ToolBar({ position: "RB" }));
           controlsAddedRef.current = true;
         }
-        renderAmapOverlays(AMap, mapRef.current, points, route?.points ?? [], () => cancelled);
+        renderAmapOverlays(AMap, mapRef.current, points, route?.points ?? [], () => cancelled, (index) => markerClickRef.current?.(index));
         setMapState("ready");
       })
       .catch(() => {
@@ -914,7 +928,14 @@ export function MapPanel({
   const fallbackVisible = mapState !== "ready";
 
   return (
-    <div className={`card map-panel ${compact ? "compact" : ""} ${scenic ? "scenic" : ""} ${mapState === "ready" ? "amap-ready" : ""}`}>
+    <div
+      className={`card map-panel ${compact ? "compact" : ""} ${scenic ? "scenic" : ""} ${mapState === "ready" ? "amap-ready" : ""}`}
+      onClick={(event) => {
+        const pin = (event.target as Element | null)?.closest?.("[data-marker-index]");
+        const index = pin ? Number(pin.getAttribute("data-marker-index")) : Number.NaN;
+        if (Number.isInteger(index)) markerClickRef.current?.(index);
+      }}
+    >
       <div ref={containerRef} className="amap-canvas" aria-label="高德地图" />
       {fallbackVisible ? (
         <div className="map-fallback" aria-hidden={mapState === "loading"}>
@@ -990,7 +1011,9 @@ type WalkingOutcome =
   | { kind: "transient" }
   | { kind: "cancelled" };
 
-function renderAmapOverlays(AMap: AMapNamespace, map: AMapInstance, points: MapPoint[], routePoints: MapPoint[], isCancelled: () => boolean = () => false) {
+type AMapClickableOverlay = { on?: (event: string, handler: () => void) => void };
+
+function renderAmapOverlays(AMap: AMapNamespace, map: AMapInstance, points: MapPoint[], routePoints: MapPoint[], isCancelled: () => boolean = () => false, onMarkerClick?: (index: number) => void) {
   map.clearMap();
   const overlays: AMapOverlay[] = [];
   const anchors = routePoints.length ? routePoints : orderOpenTour(points);
@@ -1017,12 +1040,16 @@ function renderAmapOverlays(AMap: AMapNamespace, map: AMapInstance, points: MapP
   }
 
   points.slice(0, 12).forEach((point, index) => {
-    overlays.push(new AMap.Marker({
+    const marker = new AMap.Marker({
       position: [point.lng, point.lat],
       title: point.name ?? `点位 ${index + 1}`,
       offset: new AMap.Pixel(-18, -38),
-      content: `<div class="amap-custom-pin"><span>${index + 1}</span>${escapeHtml(point.name ?? "点位")}</div>`
-    }));
+      // data-marker-index lets the container's DOM click delegation work even
+      // when the AMap event layer swallows synthetic events.
+      content: `<div class="amap-custom-pin" data-marker-index="${index}"><span>${index + 1}</span>${escapeHtml(point.name ?? "点位")}</div>`
+    });
+    if (onMarkerClick) (marker as AMapClickableOverlay).on?.("click", () => onMarkerClick(index));
+    overlays.push(marker);
   });
 
   if (overlays.length) {

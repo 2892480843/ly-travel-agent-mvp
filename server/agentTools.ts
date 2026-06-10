@@ -64,8 +64,8 @@ export function createAgentTools(context: {
     collected.uiToolCalls.push({ name: TOOL_LABELS[name] ?? name, status, summary });
   };
 
-  const emitTourIntent = (label: string, stops: MapPoint[]) => {
-    writer.write({ type: "data-action", data: { type: "tour-intent", label, stops }, transient: true });
+  const emitTourIntent = (label: string, stops: MapPoint[], days?: Array<{ day: string; stops: MapPoint[] }>) => {
+    writer.write({ type: "data-action", data: { type: "tour-intent", label, stops, ...(days?.length ? { days } : {}) }, transient: true });
   };
 
   return {
@@ -217,7 +217,7 @@ export function createAgentTools(context: {
           if (plan.mapStops && plan.mapStops.length >= 2) {
             collected.explicitMapStops = collected.explicitMapStops ?? plan.mapStops;
             collected.actionLabel = collected.actionLabel ?? plan.title;
-            emitTourIntent(plan.title, plan.mapStops);
+            emitTourIntent(plan.title, plan.mapStops, plan.mapStopsByDay);
           }
           return {
             title: plan.title,

@@ -60,6 +60,8 @@ export type GeneratedItineraryResponse = {
   toolCalls: AiToolCall[];
   /** Stops of the generated plan, consumable by the map page (智能导览). */
   mapStops?: MapPoint[];
+  /** Per-day stop groups so multi-day plans can be toured day by day. */
+  mapStopsByDay?: Array<{ day: string; stops: MapPoint[] }>;
 };
 
 export type MetricItem = {
